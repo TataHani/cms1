@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Building2, Star, MessageSquare, Bell, LogIn } from 'lucide-react'
+import { Building2, Star, MessageSquare, LogIn } from 'lucide-react'
 
 export default function Home() {
   const [user, setUser] = useState(null)
@@ -57,16 +57,12 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4">
             <span className="text-slate-600">{user.email}</span>
-            <a href="/api/auth/logout" className="text-slate-500 hover:text-slate-700">
-              Wyloguj
-            </a>
+            <a href="/api/auth/logout" className="text-slate-500 hover:text-slate-700">Wyloguj</a>
           </div>
         </div>
       </header>
-
       <main className="max-w-7xl mx-auto p-6">
         <h2 className="text-2xl font-bold text-slate-900 mb-6">Dashboard</h2>
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="flex items-center gap-4">
@@ -79,7 +75,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-          
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
@@ -91,7 +86,6 @@ export default function Home() {
               </div>
             </div>
           </div>
-          
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-cyan-100 rounded-xl flex items-center justify-center">
@@ -104,7 +98,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
           <Building2 size={48} className="text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-slate-900 mb-2">Brak połączonych wizytówek</h3>
