@@ -1,20 +1,24 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  images: {
-    domains: ['lh3.googleusercontent.com'],
-  },
+  reactStrictMode: true
 }
 
 module.exports = nextConfig
 ```
 
-4. **Kliknij "Commit changes..." → "Commit changes"**
+5. **Commit changes**
 
 ---
 
-Teraz Tailwind. **Dodaj kolejny plik:**
+Teraz jeszcze zaktualizujmy Next.js do nowszej wersji. 
 
-1. **Nazwa pliku:**
+**Znajdź plik `package.json`**, edytuj go i **zmień linię z next:**
+
+Zmień:
 ```
-   tailwind.config.js
+"next": "14.1.0",
+```
+
+Na:
+```
+"next": "14.2.21",
