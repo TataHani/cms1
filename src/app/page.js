@@ -33,12 +33,9 @@ export default function Home() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">GMB Manager</h1>
           <p className="text-slate-500 mb-8">Zarządzaj wizytówkami Google z jednego miejsca</p>
-          
-            href="/api/auth/login"
-            className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity"
-          >
+          <a href="/api/auth/login" className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">
             <LogIn size={20} />
-            Zaloguj się przez Google
+            Zaloguj sie przez Google
           </a>
         </div>
       </div>
@@ -71,7 +68,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">0</p>
-                <p className="text-slate-500">Wizytówek</p>
+                <p className="text-slate-500">Wizytowek</p>
               </div>
             </div>
           </div>
@@ -82,7 +79,7 @@ export default function Home() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900">-</p>
-                <p className="text-slate-500">Średnia ocena</p>
+                <p className="text-slate-500">Srednia ocena</p>
               </div>
             </div>
           </div>
@@ -100,14 +97,9 @@ export default function Home() {
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
           <Building2 size={48} className="text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">Brak połączonych wizytówek</h3>
-          <p className="text-slate-500 mb-6">Połącz swoje wizytówki Google, aby rozpocząć zarządzanie.</p>
-          
-            href="/api/business/connect"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity"
-          >
-            Połącz wizytówkę
-          </a>
+          <h3 className="text-lg font-medium text-slate-900 mb-2">Brak polaczonych wizytowek</h3>
+          <p className="text-slate-500 mb-6">Polacz swoje wizytowki Google, aby rozpoczac zarzadzanie.</p>
+          <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Polacz wizytowke</a>
         </div>
       </main>
     </div>
