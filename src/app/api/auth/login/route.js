@@ -19,3 +19,4 @@ export async function GET() {
     '&prompt=consent'
 
   redirect(authUrl)
+}
