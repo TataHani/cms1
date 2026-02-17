@@ -1,12 +1,15 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, AlertCircle } from 'lucide-react'
+import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, AlertCircle, Send, X } from 'lucide-react'
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([])
   const [businesses, setBusinesses] = useState([])
   const [selectedBusiness, setSelectedBusiness] = useState('all')
   const [loading, setLoading] = useState(true)
+  const [replyingTo, setReplyingTo] = useState(null)
+  const [replyText, setReplyText] = useState('')
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -28,6 +31,30 @@ export default function ReviewsPage() {
     setLoading(false)
   }
 
+  const sendReply = async (reviewId) => {
+    if (!replyText.trim()) return
+    setSending(true)
+    try {
+      const res = await fetch('/api/reviews/' + reviewId + '/reply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: replyText })
+      })
+      if (res.ok) {
+        setReviews(reviews.map(r => 
+          r.id === reviewId 
+            ? { ...r, has_reply: true, reply_comment: replyText }
+            : r
+        ))
+        setReplyingTo(null)
+        setReplyText('')
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    setSending(false)
+  }
+
   const filteredReviews = selectedBusiness === 'all' 
     ? reviews 
     : reviews.filter(r => r.business_id === selectedBusiness)
@@ -36,6 +63,9 @@ export default function ReviewsPage() {
     const business = businesses.find(b => b.id === businessId)
     return business ? business.title : 'Nieznana wizytówka'
   }
+
+  const newCount = reviews.filter(r => r.is_new).length
+  const pendingCount = reviews.filter(r => !r.has_reply).length
 
   if (loading) {
     return (
@@ -61,15 +91,26 @@ export default function ReviewsPage() {
           <div className="flex items-center gap-4">
             <a href="/alerts" className="p-2 hover:bg-slate-100 rounded-lg relative">
               <Bell size={20} className="text-slate-600" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center">3</span>
             </a>
           </div>
         </div>
       </header>
 
+      <nav className="bg-white border-b border-slate-200 px-6 py-2">
+        <div className="flex items-center gap-4 max-w-7xl mx-auto">
+          <a href="/" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Dashboard</a>
+          <a href="/reviews" className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">Opinie</a>
+          <a href="/alerts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Alerty</a>
+          <a href="/benchmark" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Benchmark</a>
+        </div>
+      </nav>
+
       <main className="max-w-7xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-slate-900">Wszystkie opinie</h2>
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Wszystkie opinie</h2>
+            <p className="text-slate-500 mt-1">{newCount} nowych, {pendingCount} oczekuje na odpowiedz</p>
+          </div>
           <select 
             value={selectedBusiness}
             onChange={(e) => setSelectedBusiness(e.target.value)}
@@ -127,8 +168,37 @@ export default function ReviewsPage() {
                   </div>
                   <p className="text-slate-600 text-sm">{review.reply_comment}</p>
                 </div>
+              ) : replyingTo === review.id ? (
+                <div className="bg-slate-50 rounded-lg p-4">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Napisz odpowiedz na opinie..."
+                    className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    rows={3}
+                  />
+                  <div className="flex items-center justify-end gap-2 mt-3">
+                    <button 
+                      onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                      className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium"
+                    >
+                      Anuluj
+                    </button>
+                    <button 
+                      onClick={() => sendReply(review.id)}
+                      disabled={sending || !replyText.trim()}
+                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                    >
+                      <Send size={16} />
+                      {sending ? 'Wysylanie...' : 'Wyslij'}
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <button className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90">
+                <button 
+                  onClick={() => setReplyingTo(review.id)}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90"
+                >
                   <Reply size={16} />
                   Odpowiedz
                 </button>
