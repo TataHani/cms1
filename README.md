@@ -1,2 +1,2 @@
 # cms1
-Portal do zarządzania wizytówkami Google
+Portal do zarządzania wizytówkami Google 
