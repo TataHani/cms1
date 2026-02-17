@@ -14,15 +14,50 @@ export async function GET() {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  const { data: businesses, error } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('user_id', userId)
-    .order('title')
+  // Sprawdź rolę użytkownika
+  const { data: user } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
 
-  if (error) {
-    return Response.json({ error: error.message }, { status: 500 })
+  let businesses
+
+  if (user?.role === 'admin') {
+    // Admin widzi wszystkie wizytówki
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .order('title')
+    
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+    businesses = data
+  } else {
+    // User widzi tylko wizytówki do których ma uprawnienia
+    const { data: permissions } = await supabase
+      .from('business_permissions')
+      .select('business_id')
+      .eq('user_id', userId)
+
+    if (!permissions || permissions.length === 0) {
+      return Response.json({ businesses: [] })
+    }
+
+    const businessIds = permissions.map(p => p.business_id)
+
+    const { data, error } = await supabase
+      .from('businesses')
+      .select('*')
+      .in('id', businessIds)
+      .order('title')
+
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+    businesses = data
   }
 
-  return Response.json({ businesses })
+  return Response.json({ businesses, isAdmin: user?.role === 'admin' })
 }
