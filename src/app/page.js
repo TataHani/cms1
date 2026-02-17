@@ -79,6 +79,14 @@ export default function Home() {
           </div>
         </div>
       </header>
+    <nav className="bg-white border-b border-slate-200 px-6 py-2">
+        <div className="flex items-center gap-4 max-w-7xl mx-auto">
+          <a href="/" className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">Dashboard</a>
+          <a href="/reviews" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Opinie</a>
+          <a href="/alerts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Alerty</a>
+          <a href="/benchmark" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Benchmark</a>
+        </div>
+      </nav>
       <main className="max-w-7xl mx-auto p-6">
         <h2 className="text-2xl font-bold text-slate-900 mb-6">Dashboard</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
