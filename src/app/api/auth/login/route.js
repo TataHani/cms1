@@ -7,7 +7,8 @@ export async function GET() {
   const scope = [
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/business.manage'
+    'https://www.googleapis.com/auth/business.manage',
+    'https://www.googleapis.com/auth/plus.business.manage'
   ].join(' ')
 
   const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
