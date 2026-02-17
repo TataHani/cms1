@@ -26,16 +26,3 @@ export async function GET() {
 
   return Response.json({ alerts })
 }
-```
-
-4. **Commit changes**
-
----
-
-Teraz dodaj endpoint do oznaczania jako przeczytane:
-
-1. **Add file** → **Create new file**
-
-2. **Nazwa:**
-```
-src/app/api/alerts/[id]/read/route.js
