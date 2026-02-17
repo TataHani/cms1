@@ -10,24 +10,13 @@ export async function GET() {
     'https://www.googleapis.com/auth/business.manage'
   ].join(' ')
 
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-    `client_id=${clientId}` +
-    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-    `&response_type=code` +
-    `&scope=${encodeURIComponent(scope)}` +
-    `&access_type=offline` +
-    `&prompt=consent`
+  const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' +
+    'client_id=' + clientId +
+    '&redirect_uri=' + encodeURIComponent(redirectUri) +
+    '&response_type=code' +
+    '&scope=' + encodeURIComponent(scope) +
+    '&access_type=offline' +
+    '&prompt=consent'
 
   redirect(authUrl)
 }
-```
-
-**Commit**, potem ostatni.
-
----
-
-**Plik 3 - callback po zalogowaniu:**
-
-Nazwa:
-```
-src/app/api/auth/callback/google/route.js
