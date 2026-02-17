@@ -14,16 +14,30 @@ export async function GET() {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  const { data: businesses } = await supabase
-    .from('businesses')
-    .select('id')
-    .eq('user_id', userId)
+  const { data: user } = await supabase
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .single()
 
-  if (!businesses || businesses.length === 0) {
-    return Response.json({ reviews: [] })
+  let businessIds
+
+  if (user?.role === 'admin') {
+    const { data: businesses } = await supabase
+      .from('businesses')
+      .select('id')
+    businessIds = businesses?.map(b => b.id) || []
+  } else {
+    const { data: permissions } = await supabase
+      .from('business_permissions')
+      .select('business_id')
+      .eq('user_id', userId)
+    businessIds = permissions?.map(p => p.business_id) || []
   }
 
-  const businessIds = businesses.map(b => b.id)
+  if (businessIds.length === 0) {
+    return Response.json({ reviews: [] })
+  }
 
   const { data: reviews, error } = await supabase
     .from('reviews')
