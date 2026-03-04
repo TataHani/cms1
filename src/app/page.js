@@ -40,20 +40,13 @@ export default function Home() {
     )
   }
 
-  if (!user) {
+if (!user) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/login'
+    }
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800">
-        <div className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full mx-4 text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <Building2 size={32} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">GMB Manager</h1>
-          <p className="text-slate-500 mb-8">Zarzadzaj wizytowkami Google z jednego miejsca</p>
-          <a href="/api/auth/login" className="flex items-center justify-center gap-3 w-full bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">
-            <LogIn size={20} />
-            Zaloguj sie przez Google
-          </a>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-100">
+        <div className="text-slate-500">Przekierowanie...</div>
       </div>
     )
   }
