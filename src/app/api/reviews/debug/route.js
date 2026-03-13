@@ -59,19 +59,44 @@ export async function GET() {
   return Response.json({ error: 'Brak kont', accounts: accountsData })
 }
 
-// Debug - pokaż konta i lokalizacje
+// Debug - pokaż konta, lokalizacje i opinie
 let debug = { accounts: [] }
 
 for (const account of accountsData.accounts) {
- const locationsRes = await fetch(
-  'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations?readMask=name,title',
+  const locationsRes = await fetch(
+    'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations?readMask=name,title',
     { headers: { 'Authorization': 'Bearer ' + accessToken } }
   )
   const locationsData = await locationsRes.json()
   
+  let locationsWithReviews = []
+  
+  for (const location of (locationsData.locations || [])) {
+    // Pobierz opinie dla lokalizacji
+    const reviewsRes = await fetch(
+      'https://mybusiness.googleapis.com/v4/' + account.name + '/' + location.name + '/reviews',
+      { headers: { 'Authorization': 'Bearer ' + accessToken } }
+    )
+    
+    let reviewsData
+    const text = await reviewsRes.text()
+    try {
+      reviewsData = JSON.parse(text)
+    } catch {
+      reviewsData = { raw: text.substring(0, 500) }
+    }
+    
+    locationsWithReviews.push({
+      name: location.name,
+      title: location.title,
+      reviews_status: reviewsRes.status,
+      reviews: reviewsData
+    })
+  }
+  
   debug.accounts.push({
     name: account.name,
-    locations: locationsData
+    locations: locationsWithReviews
   })
 }
 
