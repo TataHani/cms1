@@ -5,15 +5,29 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-export async function GET(request) {
-  // Weryfikacja że to Vercel Cron
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== 'Bearer ' + process.env.CRON_SECRET) {
-    // Pozwól też bez CRON_SECRET na początek (do testów)
-    // return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+async function sendEmail(to, subject, html) {
+  if (!process.env.RESEND_API_KEY) return
 
-  // Pobierz wszystkie połączenia Google
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + process.env.RESEND_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'GMB Manager <noreply@resend.dev>',
+        to: to,
+        subject: subject,
+        html: html
+      })
+    })
+  } catch (e) {
+    console.error('Email error:', e)
+  }
+}
+
+export async function GET(request) {
   const { data: connections } = await supabase
     .from('google_connections')
     .select('*')
@@ -23,7 +37,6 @@ export async function GET(request) {
   }
 
   let totalNewReviews = 0
-  let errors = []
 
   for (const connection of connections) {
     let accessToken = connection.access_token
@@ -54,11 +67,9 @@ export async function GET(request) {
             })
             .eq('id', connection.id)
         } else {
-          errors.push('Token refresh failed for ' + connection.google_email)
           continue
         }
       } catch (e) {
-        errors.push('Token refresh error: ' + e.message)
         continue
       }
     }
@@ -70,6 +81,12 @@ export async function GET(request) {
       .eq('google_connection_id', connection.id)
 
     if (!businesses) continue
+
+    // Pobierz ustawienia alertów użytkownika
+    const { data: alertSettings } = await supabase
+      .from('alert_settings')
+      .select('*')
+      .eq('user_id', connection.user_id)
 
     for (const business of businesses) {
       try {
@@ -84,7 +101,6 @@ export async function GET(request) {
 
         if (reviewsData.reviews) {
           for (const review of reviewsData.reviews) {
-            // Sprawdź czy opinia już istnieje
             const { data: existingReview } = await supabase
               .from('reviews')
               .select('id, comment')
@@ -94,12 +110,8 @@ export async function GET(request) {
             const isNew = !existingReview
             const isEdited = existingReview && existingReview.comment !== (review.comment || '')
 
-            // Parsuj ocenę
-            let starRating = 0
-            if (review.starRating) {
-              const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
-              starRating = ratingMap[review.starRating] || 0
-            }
+            const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
+            const starRating = ratingMap[review.starRating] || 0
 
             await supabase.from('reviews').upsert({
               business_id: business.id,
@@ -116,63 +128,57 @@ export async function GET(request) {
               onConflict: 'google_review_id'
             })
 
-            // Jeśli nowa opinia - utwórz alert i wyślij email
             if (isNew) {
               totalNewReviews++
 
-              // Utwórz alert
+              // Utwórz alert w systemie
               await supabase.from('alerts').insert({
                 user_id: connection.user_id,
                 business_id: business.id,
                 alert_type: 'NEW_REVIEW',
                 title: 'Nowa opinia ' + starRating + '★',
-                message: review.reviewer?.displayName + ' wystawil nowa opinie dla ' + business.title,
+                message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
                 is_read: false
               })
 
-              // Wyślij email (jeśli skonfigurowany Resend)
-              if (process.env.RESEND_API_KEY) {
-                try {
-                  await fetch('https://api.resend.com/emails', {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': 'Bearer ' + process.env.RESEND_API_KEY,
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                      from: 'GMB Manager <noreply@resend.dev>',
-                      to: process.env.NOTIFICATION_EMAIL,
-                      subject: 'Nowa opinia ' + starRating + '★ - ' + business.title,
-                      html: `
+              // Sprawdź czy wysłać email na podstawie ustawień
+              if (alertSettings && alertSettings.length > 0) {
+                for (const setting of alertSettings) {
+                  // Sprawdź czy reguła pasuje
+                  const matchesBusiness = !setting.business_id || setting.business_id === business.id
+                  const matchesStars = starRating >= setting.min_stars && starRating <= setting.max_stars
+
+                  if (matchesBusiness && matchesStars && setting.email_address) {
+                    await sendEmail(
+                      setting.email_address,
+                      'Nowa opinia ' + starRating + '★ - ' + business.title,
+                      `
                         <h2>Nowa opinia dla ${business.title}</h2>
                         <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
                         <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
                         <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
                         <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
                       `
-                    })
-                  })
-                } catch (emailError) {
-                  console.error('Email error:', emailError)
+                    )
+                  }
                 }
               }
             }
 
-            // Jeśli edytowana opinia - utwórz alert
             if (isEdited) {
               await supabase.from('alerts').insert({
                 user_id: connection.user_id,
                 business_id: business.id,
                 alert_type: 'EDITED_REVIEW',
                 title: 'Edytowana opinia',
-                message: review.reviewer?.displayName + ' zmienil opinie dla ' + business.title,
+                message: (review.reviewer?.displayName || 'Ktos') + ' zmienil opinie dla ' + business.title,
                 is_read: false
               })
             }
           }
         }
       } catch (e) {
-        errors.push('Reviews fetch error for ' + business.title + ': ' + e.message)
+        console.error('Reviews fetch error:', e)
       }
     }
   }
@@ -180,7 +186,6 @@ export async function GET(request) {
   return Response.json({
     success: true,
     newReviews: totalNewReviews,
-    errors: errors.length > 0 ? errors : undefined,
     timestamp: new Date().toISOString()
   })
 }
