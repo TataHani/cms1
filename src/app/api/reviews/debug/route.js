@@ -56,8 +56,26 @@ export async function GET() {
     const accountsData = await accountsRes.json()
 
     if (!accountsData.accounts) {
-      return Response.json({ error: 'Brak kont', accounts: accountsData })
-    }
+  return Response.json({ error: 'Brak kont', accounts: accountsData })
+}
+
+// Debug - pokaż konta i lokalizacje
+let debug = { accounts: [] }
+
+for (const account of accountsData.accounts) {
+  const locationsRes = await fetch(
+    'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations',
+    { headers: { 'Authorization': 'Bearer ' + accessToken } }
+  )
+  const locationsData = await locationsRes.json()
+  
+  debug.accounts.push({
+    name: account.name,
+    locations: locationsData
+  })
+}
+
+return Response.json({ debug })
 
     let results = []
 
