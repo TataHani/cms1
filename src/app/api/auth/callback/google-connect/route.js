@@ -73,5 +73,51 @@ export async function GET(request) {
     redirect('/settings?error=db_error')
   }
 
+  // Pobierz wizytówki z Google Business Profile API
+  try {
+    const accountsResponse = await fetch(
+      'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+      {
+        headers: { 'Authorization': 'Bearer ' + tokens.access_token }
+      }
+    )
+
+    const accountsData = await accountsResponse.json()
+
+    if (accountsData.accounts && accountsData.accounts.length > 0) {
+      for (const account of accountsData.accounts) {
+        const locationsResponse = await fetch(
+          'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri',
+          {
+            headers: { 'Authorization': 'Bearer ' + tokens.access_token }
+          }
+        )
+
+        const locationsData = await locationsResponse.json()
+
+        if (locationsData.locations) {
+          for (const location of locationsData.locations) {
+            await supabase.from('businesses').upsert({
+              user_id: userId,
+              google_connection_id: connection.id,
+              google_account_id: account.name,
+              google_location_id: location.name,
+              location_name: location.name,
+              title: location.title || 'Bez nazwy',
+              address: location.storefrontAddress?.addressLines?.join(', ') || '',
+              phone: location.phoneNumbers?.primaryPhone || '',
+              website: location.websiteUri || '',
+              last_synced_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id,google_location_id'
+            })
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching locations:', e)
+  }
+
   redirect('/settings?success=connected')
 }
