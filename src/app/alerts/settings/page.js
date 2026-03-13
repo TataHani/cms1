@@ -49,7 +49,6 @@ export default function AlertSettingsPage() {
 
   const removeSetting = async (index) => {
     const setting = settings[index]
-    
     if (!setting.is_new && setting.id) {
       try {
         await fetch('/api/alert-settings/' + setting.id, { method: 'DELETE' })
@@ -57,21 +56,18 @@ export default function AlertSettingsPage() {
         console.error(e)
       }
     }
-    
     setSettings(settings.filter((_, i) => i !== index))
   }
 
   const saveSettings = async () => {
     setSaving(true)
     setMessage('')
-
     try {
       const res = await fetch('/api/alert-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ settings })
       })
-
       if (res.ok) {
         setMessage('Zapisano ustawienia!')
         await loadData()
@@ -81,7 +77,6 @@ export default function AlertSettingsPage() {
     } catch (e) {
       setMessage('Blad polaczenia')
     }
-
     setSaving(false)
   }
 
@@ -130,10 +125,7 @@ export default function AlertSettingsPage() {
             <h2 className="text-2xl font-bold text-slate-900">Reguly alertow</h2>
             <p className="text-slate-500 mt-1">Skonfiguruj kiedy chcesz otrzymywac powiadomienia email</p>
           </div>
-          <button
-            onClick={addSetting}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90"
-          >
+          <button onClick={addSetting} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90">
             <Plus size={18} />
             Dodaj regule
           </button>
@@ -144,10 +136,7 @@ export default function AlertSettingsPage() {
             <Bell size={48} className="text-slate-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">Brak regul alertow</h3>
             <p className="text-slate-500 mb-4">Dodaj regule, aby otrzymywac powiadomienia email o nowych opiniach.</p>
-            <button
-              onClick={addSetting}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium"
-            >
+            <button onClick={addSetting} className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium">
               <Plus size={18} />
               Dodaj pierwsza regule
             </button>
@@ -158,74 +147,48 @@ export default function AlertSettingsPage() {
               <div key={setting.id} className="bg-white rounded-xl border border-slate-200 p-6">
                 <div className="flex items-start justify-between mb-4">
                   <h3 className="font-medium text-slate-900">Regula #{index + 1}</h3>
-                  <button
-                    onClick={() => removeSetting(index)}
-                    className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg"
-                  >
+                  <button onClick={() => removeSetting(index)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg">
                     <Trash2 size={18} />
                   </button>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Wizytowka</label>
-                    <select
-                      value={setting.business_id || ''}
-                      onChange={(e) => updateSetting(index, 'business_id', e.target.value || null)}
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg"
-                    >
+                    <select value={setting.business_id || ''} onChange={(e) => updateSetting(index, 'business_id', e.target.value || null)} className="w-full px-4 py-2 border border-slate-200 rounded-lg">
                       <option value="">Wszystkie wizytowki</option>
                       {businesses.map(b => (
                         <option key={b.id} value={b.id}>{b.title}</option>
                       ))}
                     </select>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Email na powiadomienia</label>
                     <div className="relative">
                       <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                      <input
-                        type="email"
-                        value={setting.email_address || ''}
-                        onChange={(e) => updateSetting(index, 'email_address', e.target.value)}
-                        placeholder="twoj@email.pl"
-                        className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg"
-                      />
+                      <input type="email" value={setting.email_address || ''} onChange={(e) => updateSetting(index, 'email_address', e.target.value)} placeholder="twoj@email.pl" className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg" />
                     </div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Minimalna ocena</label>
                     <div className="flex items-center gap-2">
                       {[1, 2, 3, 4, 5].map(star => (
-                        <button
-                          key={star}
-                          onClick={() => updateSetting(index, 'min_stars', star)}
-                          className={`p-2 rounded-lg ${setting.min_stars === star ? 'bg-amber-100' : 'hover:bg-slate-100'}`}
-                        >
+                        <button key={star} onClick={() => updateSetting(index, 'min_stars', star)} className={`p-2 rounded-lg ${setting.min_stars === star ? 'bg-amber-100' : 'hover:bg-slate-100'}`}>
                           <Star size={20} className={setting.min_stars <= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
                         </button>
                       ))}
                     </div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-2">Maksymalna ocena</label>
                     <div className="flex items-center gap-2">
                       {[1, 2, 3, 4, 5].map(star => (
-                        <button
-                          key={star}
-                          onClick={() => updateSetting(index, 'max_stars', star)}
-                          className={`p-2 rounded-lg ${setting.max_stars === star ? 'bg-amber-100' : 'hover:bg-slate-100'}`}
-                        >
+                        <button key={star} onClick={() => updateSetting(index, 'max_stars', star)} className={`p-2 rounded-lg ${setting.max_stars === star ? 'bg-amber-100' : 'hover:bg-slate-100'}`}>
                           <Star size={20} className={setting.max_stars >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
                         </button>
                       ))}
                     </div>
                   </div>
                 </div>
-
                 <div className="mt-4 p-3 bg-slate-50 rounded-lg">
                   <p className="text-sm text-slate-600">
                     <strong>Podglad:</strong> Otrzymasz email na <strong>{setting.email_address || '(brak emaila)'}</strong> gdy przyjdzie opinia z ocena od <strong>{setting.min_stars}★</strong> do <strong>{setting.max_stars}★</strong> dla <strong>{getBusinessName(setting.business_id)}</strong>
@@ -233,18 +196,11 @@ export default function AlertSettingsPage() {
                 </div>
               </div>
             ))}
-
             <div className="flex items-center justify-between pt-4">
               {message && (
-                <p className={`text-sm ${message.includes('Blad') ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  {message}
-                </p>
+                <p className={`text-sm ${message.includes('Blad') ? 'text-rose-600' : 'text-emerald-600'}`}>{message}</p>
               )}
-              <button
-                onClick={saveSettings}
-                disabled={saving}
-                className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 ml-auto"
-              >
+              <button onClick={saveSettings} disabled={saving} className="flex items-center gap-2 px-6 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 ml-auto">
                 <Save size={18} />
                 {saving ? 'Zapisywanie...' : 'Zapisz ustawienia'}
               </button>
