@@ -1,4 +1,4 @@
-jsimport { cookies } from 'next/headers'
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
