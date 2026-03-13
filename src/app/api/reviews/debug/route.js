@@ -68,12 +68,13 @@ export async function GET() {
     let results = []
 
     for (const business of businesses) {
+const locationName = business.google_account_id + '/' + business.google_location_id
 const reviewsResponse = await fetch(
-  'https://mybusiness.googleapis.com/v4/accounts/' + business.google_account_id.replace('accounts/', '') + '/locations/' + business.google_location_id.replace('locations/', '') + '/reviews',
-        {
-          headers: { 'Authorization': 'Bearer ' + accessToken }
-        }
-      )
+  'https://mybusinessreviews.googleapis.com/v1/' + locationName + '/reviews',
+  {
+    headers: { 'Authorization': 'Bearer ' + accessToken }
+  }
+)
 
       const reviewsData = await reviewsResponse.json()
 
