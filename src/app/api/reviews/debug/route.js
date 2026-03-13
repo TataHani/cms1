@@ -15,17 +15,13 @@ export async function GET() {
       return Response.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { data: connection, error: connError } = await supabase
+    const { data: connection } = await supabase
       .from('google_connections')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(1)
       .single()
-
-    if (connError) {
-      return Response.json({ error: 'Connection error', details: connError })
-    }
 
     if (!connection) {
       return Response.json({ error: 'Brak polaczonego konta Google' })
@@ -52,41 +48,33 @@ export async function GET() {
       }
     }
 
-    const { data: businesses, error: bizError } = await supabase
-      .from('businesses')
-      .select('*')
-      .eq('user_id', userId)
+    // Pobierz konta
+    const accountsRes = await fetch(
+      'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
+      { headers: { 'Authorization': 'Bearer ' + accessToken } }
+    )
+    const accountsData = await accountsRes.json()
 
-    if (bizError) {
-      return Response.json({ error: 'Business error', details: bizError })
-    }
-
-    if (!businesses || businesses.length === 0) {
-      return Response.json({ error: 'Brak wizytowek' })
+    if (!accountsData.accounts) {
+      return Response.json({ error: 'Brak kont', accounts: accountsData })
     }
 
     let results = []
 
-    for (const business of businesses) {
-const locationName = business.google_account_id + '/' + business.google_location_id
-const reviewsResponse = await fetch(
-  'https://mybusinessbusinessinformation.googleapis.com/v1/' + locationName + ':fetchReviews',
-  {
-    headers: { 'Authorization': 'Bearer ' + accessToken }
-  }
-)
+    for (const account of accountsData.accounts) {
+      // Pobierz lokalizacje
+      const locationsRes = await fetch(
+        'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations',
+        { headers: { 'Authorization': 'Bearer ' + accessToken } }
+      )
+      const locationsData = await locationsRes.json()
 
-      const reviewsData = await reviewsResponse.json()
+      for (const location of (locationsData.locations || [])) {
+        // Spróbuj różnych endpointów do opinii
+        const endpoints = [
+          'https://mybusiness.googleapis.com/v4/' + account.name + '/' + location.name + '/reviews',
+          'https://mybusinessaccountmanagement.googleapis.com/v1/' + location.name + '/reviews',
+        ]
 
-      results.push({
-        business: business.title,
-        location_id: business.google_location_id,
-        api_response: reviewsData
-      })
-    }
-
-    return Response.json({ results })
-  } catch (e) {
-    return Response.json({ error: e.message, stack: e.stack }, { status: 500 })
-  }
-}
+        for (const endpoint of endpoints) {
+          const reviewsRes = await fetch(endpoint, {
