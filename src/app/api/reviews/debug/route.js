@@ -73,8 +73,10 @@ for (const account of accountsData.accounts) {
   
   for (const location of (locationsData.locations || [])) {
     // Pobierz opinie dla lokalizacji
-    const reviewsRes = await fetch(
-      'https://mybusiness.googleapis.com/v4/' + account.name + '/' + location.name + '/reviews',
+const accountId = account.name.replace('accounts/', '')
+const locationId = location.name.replace('locations/', '')
+const reviewsRes = await fetch(
+  'https://mybusiness.googleapis.com/v4/accounts/' + accountId + '/locations/' + locationId + '/reviews',
       { headers: { 'Authorization': 'Bearer ' + accessToken } }
     )
     
