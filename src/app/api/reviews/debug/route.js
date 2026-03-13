@@ -78,3 +78,31 @@ export async function GET() {
 
         for (const endpoint of endpoints) {
           const reviewsRes = await fetch(endpoint, {
+            headers: { 'Authorization': 'Bearer ' + accessToken }
+          })
+          
+          let reviewsData
+          const text = await reviewsRes.text()
+          try {
+            reviewsData = JSON.parse(text)
+          } catch {
+            reviewsData = { raw: text.substring(0, 200) }
+          }
+
+          results.push({
+            account: account.name,
+            location: location.name,
+            title: location.title,
+            endpoint: endpoint,
+            status: reviewsRes.status,
+            response: reviewsData
+          })
+        }
+      }
+    }
+
+    return Response.json({ results })
+  } catch (e) {
+    return Response.json({ error: e.message, stack: e.stack }, { status: 500 })
+  }
+}
