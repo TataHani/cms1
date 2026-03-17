@@ -115,6 +115,7 @@ export default function AlertSettingsPage() {
           <a href="/" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Dashboard</a>
           <a href="/reviews" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Opinie</a>
           <a href="/alerts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Alerty</a>
+          <a href="/analiza" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Analiza</a>
           <a href="/alert-settings" className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">Ustawienia alertow</a>
           <a href="/settings" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Ustawienia</a>
           <a href="/admin" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Admin</a>
