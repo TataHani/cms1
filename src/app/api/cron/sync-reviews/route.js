@@ -102,7 +102,11 @@ export async function GET(request) {
           }
         )
 
-        const reviewsData = await reviewsResponse.json()
+        const responseText = await reviewsResponse.text()
+        console.log('Google API status:', reviewsResponse.status, 'for', business.google_location_id)
+        console.log('Google API response:', responseText.substring(0, 300))
+
+        const reviewsData = JSON.parse(responseText)
 
         if (reviewsData.reviews) {
           for (const review of reviewsData.reviews) {
