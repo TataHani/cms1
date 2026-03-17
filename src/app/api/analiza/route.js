@@ -15,8 +15,10 @@ export async function GET(request) {
   }
 
   const { searchParams } = new URL(request.url)
-  const businessId = searchParams.get('business_id') || 'all'
-  const period = parseInt(searchParams.get('period') || '30')
+  const businessIds = searchParams.get('business_ids') || 'all'
+  const period = searchParams.get('period') || '30'
+  const dateFrom = searchParams.get('date_from')
+  const dateTo = searchParams.get('date_to')
 
   const { data: user } = await supabase
     .from('users')
@@ -45,14 +47,20 @@ export async function GET(request) {
     return Response.json({ businesses: [], stats: {}, distribution: [], trend: [], ranking: [] })
   }
 
-  const selectedIds = businessId === 'all'
+  const selectedIds = businessIds === 'all'
     ? businesses.map(b => b.id)
-    : [businessId]
+    : businessIds.split(',').filter(id => businesses.find(b => b.id === id))
 
   let reviewsQuery = supabase.from('reviews').select('*').in('business_id', selectedIds)
-  if (period > 0) {
-    const dateFrom = new Date(Date.now() - period * 24 * 60 * 60 * 1000).toISOString()
+
+  if (period === 'custom' && dateFrom) {
     reviewsQuery = reviewsQuery.gte('create_time', dateFrom)
+    if (dateTo) {
+      reviewsQuery = reviewsQuery.lte('create_time', dateTo + 'T23:59:59.999Z')
+    }
+  } else if (parseInt(period) > 0) {
+    const from = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000).toISOString()
+    reviewsQuery = reviewsQuery.gte('create_time', from)
   }
 
   const { data: reviews } = await reviewsQuery
@@ -87,19 +95,21 @@ export async function GET(request) {
       count: data.count
     }))
 
-  const ranking = businesses.map(business => {
-    const bizReviews = allReviews.filter(r => r.business_id === business.id)
-    const bizAvg = bizReviews.length > 0
-      ? (bizReviews.reduce((sum, r) => sum + r.star_rating, 0) / bizReviews.length).toFixed(1)
-      : 0
-    return {
-      id: business.id,
-      title: business.title,
-      avgRating: parseFloat(bizAvg),
-      totalReviews: bizReviews.length,
-      unanswered: bizReviews.filter(r => !r.has_reply).length
-    }
-  }).sort((a, b) => b.avgRating - a.avgRating)
+  const ranking = businesses
+    .filter(b => selectedIds.includes(b.id))
+    .map(business => {
+      const bizReviews = allReviews.filter(r => r.business_id === business.id)
+      const bizAvg = bizReviews.length > 0
+        ? (bizReviews.reduce((sum, r) => sum + r.star_rating, 0) / bizReviews.length).toFixed(1)
+        : 0
+      return {
+        id: business.id,
+        title: business.title,
+        avgRating: parseFloat(bizAvg),
+        totalReviews: bizReviews.length,
+        unanswered: bizReviews.filter(r => !r.has_reply).length
+      }
+    }).sort((a, b) => b.avgRating - a.avgRating)
 
   return Response.json({
     businesses,

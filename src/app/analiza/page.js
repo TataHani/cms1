@@ -1,6 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
-import { Star, Download, Printer, BarChart2, ArrowLeft } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Star, Download, Printer, BarChart2, ArrowLeft, ChevronDown, Check } from 'lucide-react'
 
 function TrendChart({ data }) {
   if (!data || data.length < 2) {
@@ -58,14 +58,7 @@ function TrendChart({ data }) {
         <circle key={i} cx={p.x} cy={p.y} r="4" fill="#10b981" stroke="white" strokeWidth="2" />
       ))}
       {data.map((d, i) => (
-        <text
-          key={i}
-          x={pad.left + i * xStep}
-          y={height - 6}
-          textAnchor="middle"
-          fontSize="10"
-          fill="#94a3b8"
-        >
+        <text key={i} x={pad.left + i * xStep} y={height - 6} textAnchor="middle" fontSize="10" fill="#94a3b8">
           {formatMonth(d.month)}
         </text>
       ))}
@@ -73,10 +66,83 @@ function TrendChart({ data }) {
   )
 }
 
+function BusinessMultiSelect({ businesses, selectedIds, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const allSelected = selectedIds.length === 0 || selectedIds.length === businesses.length
+
+  const toggleAll = () => onChange([])
+  const toggle = (id) => {
+    if (selectedIds.includes(id)) {
+      const next = selectedIds.filter(x => x !== id)
+      onChange(next.length === businesses.length ? [] : next)
+    } else {
+      const next = [...selectedIds, id]
+      onChange(next.length === businesses.length ? [] : next)
+    }
+  }
+
+  const label = allSelected
+    ? 'Wszystkie wizytówki'
+    : selectedIds.length === 1
+      ? businesses.find(b => b.id === selectedIds[0])?.title || '1 wizytówka'
+      : `${selectedIds.length} wizytówki`
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm text-slate-700 hover:bg-slate-50 min-w-48"
+      >
+        <span className="flex-1 text-left truncate">{label}</span>
+        <ChevronDown size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 min-w-56 py-1">
+          <button
+            onClick={toggleAll}
+            className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-slate-50 text-sm"
+          >
+            <div className={`w-4 h-4 rounded border flex items-center justify-center ${allSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+              {allSelected && <Check size={11} className="text-white" strokeWidth={3} />}
+            </div>
+            <span className="font-medium text-slate-700">Wszystkie wizytówki</span>
+          </button>
+          <div className="border-t border-slate-100 my-1" />
+          {businesses.map(b => {
+            const checked = allSelected || selectedIds.includes(b.id)
+            return (
+              <button
+                key={b.id}
+                onClick={() => toggle(b.id)}
+                className="flex items-center gap-3 w-full px-4 py-2.5 hover:bg-slate-50 text-sm"
+              >
+                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${checked ? 'bg-emerald-500 border-emerald-500' : 'border-slate-300'}`}>
+                  {checked && <Check size={11} className="text-white" strokeWidth={3} />}
+                </div>
+                <span className="text-slate-700 truncate text-left">{b.title}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function AnalizaPage() {
   const [businesses, setBusinesses] = useState([])
-  const [selectedBusiness, setSelectedBusiness] = useState('all')
+  const [selectedBusinessIds, setSelectedBusinessIds] = useState([])
   const [period, setPeriod] = useState('30')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [stats, setStats] = useState(null)
   const [distribution, setDistribution] = useState([])
   const [trend, setTrend] = useState([])
@@ -84,13 +150,19 @@ export default function AnalizaPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (period === 'custom' && (!dateFrom || !dateTo)) return
     loadData()
-  }, [selectedBusiness, period])
+  }, [selectedBusinessIds, period, dateFrom, dateTo])
 
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await fetch(`/api/analiza?business_id=${selectedBusiness}&period=${period}`)
+      const bizParam = selectedBusinessIds.length === 0 ? 'all' : selectedBusinessIds.join(',')
+      let url = `/api/analiza?business_ids=${bizParam}&period=${period}`
+      if (period === 'custom') {
+        url += `&date_from=${dateFrom}&date_to=${dateTo}`
+      }
+      const res = await fetch(url)
       const data = await res.json()
       setBusinesses(data.businesses || [])
       setStats(data.stats || {})
@@ -170,29 +242,42 @@ export default function AnalizaPage() {
 
       <main className="max-w-7xl mx-auto p-6">
         {/* Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6 print:hidden">
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-6 print:hidden">
           <h2 className="text-2xl font-bold text-slate-900">Analiza opinii</h2>
-          <div className="flex items-center gap-3">
-            <select
-              value={selectedBusiness}
-              onChange={e => setSelectedBusiness(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm"
-            >
-              <option value="all">Wszystkie wizytówki</option>
-              {businesses.map(b => (
-                <option key={b.id} value={b.id}>{b.title}</option>
-              ))}
-            </select>
+          <div className="flex flex-wrap items-center gap-3">
+            <BusinessMultiSelect
+              businesses={businesses}
+              selectedIds={selectedBusinessIds}
+              onChange={setSelectedBusinessIds}
+            />
             <select
               value={period}
               onChange={e => setPeriod(e.target.value)}
-              className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm"
+              className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm text-slate-700"
             >
               <option value="7">Ostatnie 7 dni</option>
               <option value="30">Ostatnie 30 dni</option>
               <option value="90">Ostatnie 90 dni</option>
               <option value="0">Wszystkie czasy</option>
+              <option value="custom">Zakres własny</option>
             </select>
+            {period === 'custom' && (
+              <>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm text-slate-700"
+                />
+                <span className="text-slate-400 text-sm">–</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm text-slate-700"
+                />
+              </>
+            )}
           </div>
         </div>
 
@@ -217,10 +302,11 @@ export default function AnalizaPage() {
                 <p className="text-sm text-slate-500 mb-1">Nowe opinie</p>
                 <p className="text-3xl font-bold text-emerald-600">{stats?.newReviews ?? 0}</p>
               </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-5">
+              <a href="/reviews?unanswered=1" className="bg-white rounded-xl border border-slate-200 p-5 hover:border-rose-300 hover:shadow-sm transition-all group">
                 <p className="text-sm text-slate-500 mb-1">Bez odpowiedzi</p>
-                <p className="text-3xl font-bold text-rose-500">{stats?.unanswered ?? 0}</p>
-              </div>
+                <p className="text-3xl font-bold text-rose-500 group-hover:text-rose-600">{stats?.unanswered ?? 0}</p>
+                <p className="text-xs text-slate-400 mt-1 group-hover:text-rose-400">Kliknij aby zobaczyć →</p>
+              </a>
             </div>
 
             {/* Distribution + Ranking */}
@@ -261,7 +347,12 @@ export default function AnalizaPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-slate-900 truncate">{biz.title}</p>
-                        <p className="text-xs text-slate-400">{biz.totalReviews} opinii · {biz.unanswered} bez odpowiedzi</p>
+                        <p className="text-xs text-slate-400">
+                          {biz.totalReviews} opinii ·{' '}
+                          <a href="/reviews?unanswered=1" className="text-rose-400 hover:text-rose-500">
+                            {biz.unanswered} bez odpowiedzi
+                          </a>
+                        </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         <Star size={13} className="text-amber-400 fill-amber-400" />

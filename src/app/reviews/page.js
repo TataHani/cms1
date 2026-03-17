@@ -1,17 +1,20 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, AlertCircle, Send, X } from 'lucide-react'
+import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, Send, X } from 'lucide-react'
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([])
   const [businesses, setBusinesses] = useState([])
   const [selectedBusiness, setSelectedBusiness] = useState('all')
+  const [onlyUnanswered, setOnlyUnanswered] = useState(false)
   const [loading, setLoading] = useState(true)
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('unanswered') === '1') setOnlyUnanswered(true)
     loadData()
   }, [])
 
@@ -55,9 +58,9 @@ export default function ReviewsPage() {
     setSending(false)
   }
 
-  const filteredReviews = selectedBusiness === 'all' 
-    ? reviews 
-    : reviews.filter(r => r.business_id === selectedBusiness)
+  const filteredReviews = reviews
+    .filter(r => selectedBusiness === 'all' || r.business_id === selectedBusiness)
+    .filter(r => !onlyUnanswered || !r.has_reply)
 
   const getBusinessName = (businessId) => {
     const business = businesses.find(b => b.id === businessId)
@@ -125,6 +128,12 @@ export default function ReviewsPage() {
               <option key={b.id} value={b.id}>{b.title}</option>
             ))}
           </select>
+          <button
+            onClick={() => setOnlyUnanswered(!onlyUnanswered)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${onlyUnanswered ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+          >
+            {onlyUnanswered ? '✕ Bez odpowiedzi' : 'Bez odpowiedzi'}
+          </button>
         </div>
 
         <div className="space-y-4">
