@@ -30,14 +30,7 @@ async function sendEmail(to, subject, html) {
 export async function GET(request) {
   const secret = request.headers.get('x-cron-secret')
   if (secret !== process.env.CRON_SECRET) {
-    return Response.json({
-      error: 'Unauthorized',
-      debug: {
-        received: secret,
-        expected_length: process.env.CRON_SECRET?.length,
-        env_set: !!process.env.CRON_SECRET
-      }
-    }, { status: 401 })
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const { data: connections } = await supabase
