@@ -96,17 +96,13 @@ export async function GET(request) {
     for (const business of businesses) {
       try {
         const reviewsResponse = await fetch(
-          'https://mybusiness.googleapis.com/v4/' + business.google_location_id + '/reviews',
+          'https://mybusiness.googleapis.com/v4/' + business.google_account_id + '/' + business.google_location_id + '/reviews',
           {
             headers: { 'Authorization': 'Bearer ' + accessToken }
           }
         )
 
-        const responseText = await reviewsResponse.text()
-        console.log('Google API status:', reviewsResponse.status, 'for', business.google_location_id)
-        console.log('Google API response:', responseText.substring(0, 300))
-
-        const reviewsData = JSON.parse(responseText)
+        const reviewsData = await reviewsResponse.json()
 
         if (reviewsData.reviews) {
           for (const review of reviewsData.reviews) {
