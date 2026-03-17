@@ -10,7 +10,8 @@
     const { data: businesses } = await supabase
       .from('businesses')
       .select('id, title, google_account_id, google_location_id, google_connection_id')
-      .limit(1)
+  .eq('title', 'Ford Plichta Gdańsk')
+  .limit(1)
 
     if (!businesses || businesses.length === 0) {
       return Response.json({ error: 'Brak wizytówek w bazie' })
