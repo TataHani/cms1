@@ -28,6 +28,11 @@ async function sendEmail(to, subject, html) {
 }
 
 export async function GET(request) {
+  const secret = request.headers.get('x-cron-secret')
+  if (secret !== process.env.CRON_SECRET) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const { data: connections } = await supabase
     .from('google_connections')
     .select('*')
