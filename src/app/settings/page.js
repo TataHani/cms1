@@ -70,6 +70,7 @@ export default function SettingsPage() {
           <a href="/benchmark" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Benchmark</a>
           <a href="/posts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Posty</a>
           <a href="/settings" className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">Ustawienia</a>
+          <a href="/admin" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Admin</a>
         </div>
       </nav>
 

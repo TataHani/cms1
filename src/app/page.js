@@ -5,6 +5,7 @@ import { Building2, Star, MessageSquare, LogIn, RefreshCw } from 'lucide-react'
 export default function Home() {
   const [user, setUser] = useState(null)
   const [businesses, setBusinesses] = useState([])
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -26,6 +27,7 @@ export default function Home() {
       const res = await fetch('/api/businesses')
       const data = await res.json()
       setBusinesses(data.businesses || [])
+      setIsAdmin(data.isAdmin || false)
     } catch (e) {
       console.error(e)
     }
@@ -80,6 +82,9 @@ if (!user) {
           <a href="/benchmark" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Benchmark</a>
     <a href="/posts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Posty</a>
     <a href="/settings" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Ustawienia</a>
+          {isAdmin && (
+            <a href="/admin" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Admin</a>
+          )}
         </div>
       </nav>
       <main className="max-w-7xl mx-auto p-6">

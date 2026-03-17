@@ -181,6 +181,22 @@ export async function GET(request) {
               })
             }
           }
+
+          // Przelicz i zaktualizuj statystyki wizytówki na podstawie zsynchronizowanych opinii
+          const { data: allReviews } = await supabase
+            .from('reviews')
+            .select('star_rating')
+            .eq('business_id', business.id)
+
+          if (allReviews && allReviews.length > 0) {
+            const totalReviews = allReviews.length
+            const avgRating = (allReviews.reduce((sum, r) => sum + r.star_rating, 0) / totalReviews).toFixed(1)
+
+            await supabase
+              .from('businesses')
+              .update({ total_reviews: totalReviews, average_rating: avgRating })
+              .eq('id', business.id)
+          }
         }
       } catch (e) {
         console.error('Reviews fetch error:', e)
