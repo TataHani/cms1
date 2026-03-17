@@ -73,7 +73,7 @@ export async function GET() {
   for (const business of businesses) {
     try {
       const reviewsResponse = await fetch(
-      'https://mybusiness.googleapis.com/v4/' + business.google_account_id + '/' + business.google_location_id + '/reviews'
+      'https://mybusiness.googleapis.com/v4/' + business.google_account_id + '/' + business.google_location_id + '/reviews',
         {
           headers: { 'Authorization': 'Bearer ' + accessToken }
         }
