@@ -55,32 +55,53 @@ export async function GET(request) {
     locationId + '/reviews/' +
     review.google_review_id + '/reply'
 
-  // Test PUT — wyślij testową odpowiedź i pokaż co Google zwraca
-  let putStatus = null
-  let putBody = null
+  // Pobierz opinie z v4 API żeby zobaczyć jak wygląda review.name
+  let v4ReviewsStatus = null
+  let v4ReviewSample = null
   try {
-    const putResponse = await fetch(replyUrl, {
-      method: 'PUT',
-      headers: {
-        'Authorization': 'Bearer ' + connection.access_token,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ comment: 'TEST - debug reply, prosze zignorowac' })
+    const v4Url = 'https://mybusiness.googleapis.com/v4/' +
+      business.google_account_id + '/' +
+      business.google_location_id + '/reviews?pageSize=1'
+    const v4Res = await fetch(v4Url, {
+      headers: { 'Authorization': 'Bearer ' + connection.access_token }
     })
-    putStatus = putResponse.status
-    const text = await putResponse.text()
-    try { putBody = JSON.parse(text) } catch { putBody = text.substring(0, 500) }
+    v4ReviewsStatus = v4Res.status
+    const v4Data = await v4Res.json()
+    if (v4Data.reviews?.[0]) {
+      v4ReviewSample = {
+        name: v4Data.reviews[0].name,
+        reviewId: v4Data.reviews[0].reviewId
+      }
+    }
   } catch (e) {
-    putBody = 'fetch error: ' + e.message
+    v4ReviewSample = 'error: ' + e.message
+  }
+
+  // Spróbuj pobrać opinie też z v1 API
+  const locationId = business.google_location_id.replace('locations/', '')
+  let v1ReviewsStatus = null
+  let v1ReviewSample = null
+  try {
+    const v1Url = 'https://mybusinessreviews.googleapis.com/v1/locations/' + locationId + '/reviews?pageSize=1'
+    const v1Res = await fetch(v1Url, {
+      headers: { 'Authorization': 'Bearer ' + connection.access_token }
+    })
+    v1ReviewsStatus = v1Res.status
+    const text = await v1Res.text()
+    try { v1ReviewSample = JSON.parse(text) } catch { v1ReviewSample = text.substring(0, 300) }
+  } catch (e) {
+    v1ReviewSample = 'error: ' + e.message
   }
 
   return Response.json({
-    google_review_id: review.google_review_id,
-    google_account_id: business.google_account_id,
-    google_location_id: business.google_location_id,
-    reply_url: replyUrl,
-    token_expired: new Date(connection.token_expires_at) < new Date(),
-    put_status: putStatus,
-    put_response: putBody
+    stored_in_db: {
+      google_review_id: review.google_review_id,
+      google_account_id: business.google_account_id,
+      google_location_id: business.google_location_id,
+    },
+    v4_reviews_status: v4ReviewsStatus,
+    v4_review_name_sample: v4ReviewSample,
+    v1_reviews_status: v1ReviewsStatus,
+    v1_response: v1ReviewSample
   })
 }
