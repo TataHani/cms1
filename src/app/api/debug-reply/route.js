@@ -55,18 +55,23 @@ export async function GET(request) {
     locationId + '/reviews/' +
     review.google_review_id + '/reply'
 
-  // Wywołaj Google API i zwróć pełną odpowiedź
-  let googleStatus = null
-  let googleBody = null
+  // Test PUT — wyślij testową odpowiedź i pokaż co Google zwraca
+  let putStatus = null
+  let putBody = null
   try {
-    const checkResponse = await fetch(replyUrl, {
-      headers: { 'Authorization': 'Bearer ' + connection.access_token }
+    const putResponse = await fetch(replyUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': 'Bearer ' + connection.access_token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ comment: 'TEST - debug reply, prosze zignorowac' })
     })
-    googleStatus = checkResponse.status
-    const text = await checkResponse.text()
-    try { googleBody = JSON.parse(text) } catch { googleBody = text }
+    putStatus = putResponse.status
+    const text = await putResponse.text()
+    try { putBody = JSON.parse(text) } catch { putBody = text.substring(0, 500) }
   } catch (e) {
-    googleBody = 'fetch error: ' + e.message
+    putBody = 'fetch error: ' + e.message
   }
 
   return Response.json({
@@ -75,7 +80,7 @@ export async function GET(request) {
     google_location_id: business.google_location_id,
     reply_url: replyUrl,
     token_expired: new Date(connection.token_expires_at) < new Date(),
-    google_response_status: googleStatus,
-    google_response_body: googleBody
+    put_status: putStatus,
+    put_response: putBody
   })
 }
