@@ -55,11 +55,19 @@ export async function GET(request) {
     business.google_location_id + '/reviews/' +
     review.google_review_id + '/reply'
 
-  // Wywołaj GET na ten URL żeby zobaczyć czy odpowiedź w ogóle istnieje
-  const checkResponse = await fetch(replyUrl, {
-    headers: { 'Authorization': 'Bearer ' + connection.access_token }
-  })
-  const checkData = await checkResponse.json()
+  // Wywołaj Google API i zwróć pełną odpowiedź
+  let googleStatus = null
+  let googleBody = null
+  try {
+    const checkResponse = await fetch(replyUrl, {
+      headers: { 'Authorization': 'Bearer ' + connection.access_token }
+    })
+    googleStatus = checkResponse.status
+    const text = await checkResponse.text()
+    try { googleBody = JSON.parse(text) } catch { googleBody = text }
+  } catch (e) {
+    googleBody = 'fetch error: ' + e.message
+  }
 
   return Response.json({
     google_review_id: review.google_review_id,
@@ -67,7 +75,7 @@ export async function GET(request) {
     google_location_id: business.google_location_id,
     reply_url: replyUrl,
     token_expired: new Date(connection.token_expires_at) < new Date(),
-    google_response_status: checkResponse.status,
-    google_response_body: checkData
+    google_response_status: googleStatus,
+    google_response_body: googleBody
   })
 }
