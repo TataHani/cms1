@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import { Star, Download, Printer, BarChart2, ArrowLeft, ChevronDown, Check } from 'lucide-react'
+import NavBar from '../components/NavBar'
 
 function TrendChart({ data }) {
   if (!data || data.length < 2) {
@@ -227,18 +228,7 @@ export default function AnalizaPage() {
         </div>
       </header>
 
-      <nav className="bg-white border-b border-slate-200 px-6 py-2 print:hidden">
-        <div className="flex items-center gap-4 max-w-7xl mx-auto">
-          <a href="/" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Dashboard</a>
-          <a href="/reviews" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Opinie</a>
-          <a href="/alerts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Alerty</a>
-          <a href="/analiza" className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">Analiza</a>
-          <a href="/benchmark" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Benchmark</a>
-          <a href="/posts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Posty</a>
-          <a href="/settings" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Ustawienia</a>
-          <a href="/admin" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Admin</a>
-        </div>
-      </nav>
+      <NavBar activePage="analiza" printHidden />
 
       <main className="max-w-7xl mx-auto p-6">
         {/* Filters */}

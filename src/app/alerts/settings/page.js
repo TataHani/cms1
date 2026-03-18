@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Bell, Mail, Star, Save, Plus, Trash2 } from 'lucide-react'
+import NavBar from '../../components/NavBar'
 
 export default function AlertSettingsPage() {
   const [businesses, setBusinesses] = useState([])
@@ -110,17 +111,7 @@ export default function AlertSettingsPage() {
         </div>
       </header>
 
-      <nav className="bg-white border-b border-slate-200 px-6 py-2">
-        <div className="flex items-center gap-4 max-w-7xl mx-auto">
-          <a href="/" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Dashboard</a>
-          <a href="/reviews" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Opinie</a>
-          <a href="/alerts" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Alerty</a>
-          <a href="/analiza" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Analiza</a>
-          <a href="/alerts/settings" className="px-4 py-2 bg-emerald-100 text-emerald-700 rounded-lg text-sm font-medium">Ustawienia alertow</a>
-          <a href="/settings" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Ustawienia</a>
-          <a href="/admin" className="px-4 py-2 hover:bg-slate-100 rounded-lg text-sm font-medium text-slate-600">Admin</a>
-        </div>
-      </nav>
+      <NavBar activePage="settings" />
 
       <main className="max-w-3xl mx-auto p-6">
         <div className="flex items-center justify-between mb-6">
