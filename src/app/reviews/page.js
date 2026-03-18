@@ -157,7 +157,7 @@ export default function ReviewsPage() {
                   </div>
                 </div>
                 <span className="text-sm text-slate-400">
-                  {new Date(review.create_time).toLocaleDateString('pl-PL')}
+                  {new Date(review.create_time).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
               </div>
 
