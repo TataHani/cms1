@@ -7,6 +7,7 @@ export default function Home() {
   const [user, setUser] = useState(null)
   const [businesses, setBusinesses] = useState([])
   const [isAdmin, setIsAdmin] = useState(false)
+  const [hasGoogleConnection, setHasGoogleConnection] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,6 +30,7 @@ export default function Home() {
       const data = await res.json()
       setBusinesses(data.businesses || [])
       setIsAdmin(data.isAdmin || false)
+      setHasGoogleConnection(data.hasGoogleConnection || false)
     } catch (e) {
       console.error(e)
     }
@@ -116,7 +118,7 @@ if (!user) {
 
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-900">Twoje wizytowki</h3>
-          {isAdmin && (
+          {hasGoogleConnection && (
             <a href="/api/business/connect" className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 px-4 rounded-lg text-sm font-medium hover:opacity-90">
               <RefreshCw size={16} />
               Synchronizuj
@@ -127,16 +129,17 @@ if (!user) {
         {businesses.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
             <Building2 size={48} className="text-slate-300 mx-auto mb-4" />
-            {isAdmin ? (
+            {hasGoogleConnection ? (
               <>
                 <h3 className="text-lg font-medium text-slate-900 mb-2">Brak polaczonych wizytowek</h3>
-                <p className="text-slate-500 mb-6">Polacz swoje wizytowki Google, aby rozpoczac zarzadzanie.</p>
-                <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Polacz wizytowke</a>
+                <p className="text-slate-500 mb-6">Kliknij "Synchronizuj" aby pobrac wizytowki z Google Business Profile.</p>
+                <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Pobierz wizytowki</a>
               </>
             ) : (
               <>
-                <h3 className="text-lg font-medium text-slate-900 mb-2">Brak dostepu do wizytowek</h3>
-                <p className="text-slate-500">Nie masz jeszcze przypisanych wizytowek. Skontaktuj sie z administratorem.</p>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">Polacz konto Google</h3>
+                <p className="text-slate-500 mb-6">Aby importowac wizytowki, najpierw polacz swoje konto Google Business Profile.</p>
+                <a href="/settings" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Przejdz do Ustawien</a>
               </>
             )}
           </div>

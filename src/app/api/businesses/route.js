@@ -21,6 +21,16 @@ export async function GET() {
     .eq('id', userId)
     .single()
 
+  // Sprawdź czy user ma połączone konto Google
+  const { data: googleConnection } = await supabase
+    .from('google_connections')
+    .select('id')
+    .eq('user_id', userId)
+    .limit(1)
+    .single()
+
+  const hasGoogleConnection = !!googleConnection
+
   let businesses
 
   if (user?.role === 'admin') {
@@ -29,35 +39,30 @@ export async function GET() {
       .from('businesses')
       .select('*')
       .order('title')
-    
+
     if (error) {
       return Response.json({ error: error.message }, { status: 500 })
     }
     businesses = data
   } else {
-    // User widzi tylko wizytówki do których ma uprawnienia
-    const { data: permissions } = await supabase
-      .from('business_permissions')
-      .select('business_id')
-      .eq('user_id', userId)
+    // User widzi własne wizytówki (z jego konta Google) + te do których ma uprawnienia
+    const [ownResult, permResult] = await Promise.all([
+      supabase.from('businesses').select('*').eq('user_id', userId),
+      supabase.from('business_permissions').select('business_id').eq('user_id', userId)
+    ])
 
-    if (!permissions || permissions.length === 0) {
-      return Response.json({ businesses: [] })
+    const ownIds = new Set((ownResult.data || []).map(b => b.id))
+    const permIds = (permResult.data || []).map(p => p.business_id).filter(id => !ownIds.has(id))
+
+    let permBusinesses = []
+    if (permIds.length > 0) {
+      const { data } = await supabase.from('businesses').select('*').in('id', permIds)
+      permBusinesses = data || []
     }
 
-    const businessIds = permissions.map(p => p.business_id)
-
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('*')
-      .in('id', businessIds)
-      .order('title')
-
-    if (error) {
-      return Response.json({ error: error.message }, { status: 500 })
-    }
-    businesses = data
+    businesses = [...(ownResult.data || []), ...permBusinesses]
+      .sort((a, b) => a.title.localeCompare(b.title))
   }
 
-  return Response.json({ businesses, isAdmin: user?.role === 'admin' })
+  return Response.json({ businesses, isAdmin: user?.role === 'admin', hasGoogleConnection })
 }
