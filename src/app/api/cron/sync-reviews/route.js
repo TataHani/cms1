@@ -163,6 +163,7 @@ export async function GET(request) {
             comment: review.comment || '',
             has_reply: !!review.reviewReply,
             reply_comment: review.reviewReply?.comment || null,
+            reply_update_time: review.reviewReply?.updateTime || null,
             is_new: isNew,
             is_edited: isEdited,
             create_time: review.createTime

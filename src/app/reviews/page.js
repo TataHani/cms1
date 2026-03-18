@@ -170,9 +170,16 @@ export default function ReviewsPage() {
 
               {review.has_reply ? (
                 <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-emerald-500">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CheckCircle size={16} className="text-emerald-600" />
-                    <span className="text-sm font-medium text-emerald-700">Twoja odpowiedz</span>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={16} className="text-emerald-600" />
+                      <span className="text-sm font-medium text-emerald-700">Twoja odpowiedz</span>
+                    </div>
+                    {review.reply_update_time && (
+                      <span className="text-xs text-slate-400">
+                        {new Date(review.reply_update_time).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    )}
                   </div>
                   <p className="text-slate-600 text-sm">{review.reply_comment}</p>
                 </div>

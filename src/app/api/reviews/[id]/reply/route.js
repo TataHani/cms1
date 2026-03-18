@@ -111,12 +111,15 @@ export async function POST(request, { params }) {
     return Response.json({ error: 'Google API error: ' + errorMessage }, { status: 502 })
   }
 
+  const googleData = await googleResponse.json()
+
   // Odpowiedź trafiła do Google — teraz aktualizuj DB
   const { error: dbError } = await supabase
     .from('reviews')
     .update({
       has_reply: true,
-      reply_comment: reply.trim()
+      reply_comment: reply.trim(),
+      reply_update_time: googleData.updateTime || new Date().toISOString()
     })
     .eq('id', params.id)
 
