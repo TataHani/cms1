@@ -116,18 +116,29 @@ if (!user) {
 
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-900">Twoje wizytowki</h3>
-          <a href="/api/business/connect" className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 px-4 rounded-lg text-sm font-medium hover:opacity-90">
-            <RefreshCw size={16} />
-            Synchronizuj
-          </a>
+          {isAdmin && (
+            <a href="/api/business/connect" className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 px-4 rounded-lg text-sm font-medium hover:opacity-90">
+              <RefreshCw size={16} />
+              Synchronizuj
+            </a>
+          )}
         </div>
 
         {businesses.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-8 text-center">
             <Building2 size={48} className="text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Brak polaczonych wizytowek</h3>
-            <p className="text-slate-500 mb-6">Polacz swoje wizytowki Google, aby rozpoczac zarzadzanie.</p>
-            <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Polacz wizytowke</a>
+            {isAdmin ? (
+              <>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">Brak polaczonych wizytowek</h3>
+                <p className="text-slate-500 mb-6">Polacz swoje wizytowki Google, aby rozpoczac zarzadzanie.</p>
+                <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Polacz wizytowke</a>
+              </>
+            ) : (
+              <>
+                <h3 className="text-lg font-medium text-slate-900 mb-2">Brak dostepu do wizytowek</h3>
+                <p className="text-slate-500">Nie masz jeszcze przypisanych wizytowek. Skontaktuj sie z administratorem.</p>
+              </>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
