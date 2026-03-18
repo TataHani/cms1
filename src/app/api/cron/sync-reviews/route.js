@@ -27,6 +27,33 @@ async function sendEmail(to, subject, html) {
   }
 }
 
+async function fetchAllReviews(accountId, locationId, accessToken) {
+  let allReviews = []
+  let pageToken = null
+
+  do {
+    const url = new URL(
+      'https://mybusiness.googleapis.com/v4/' + accountId + '/' + locationId + '/reviews'
+    )
+    url.searchParams.set('pageSize', '50')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+    const response = await fetch(url.toString(), {
+      headers: { 'Authorization': 'Bearer ' + accessToken }
+    })
+
+    const data = await response.json()
+
+    if (data.reviews) {
+      allReviews = allReviews.concat(data.reviews)
+    }
+
+    pageToken = data.nextPageToken || null
+  } while (pageToken)
+
+  return allReviews
+}
+
 export async function GET(request) {
   const secret = request.headers.get('x-cron-secret')
   if (secret !== process.env.CRON_SECRET) {
@@ -95,108 +122,110 @@ export async function GET(request) {
 
     for (const business of businesses) {
       try {
-        const reviewsResponse = await fetch(
-          'https://mybusiness.googleapis.com/v4/' + business.google_account_id + '/' + business.google_location_id + '/reviews',
-          {
-            headers: { 'Authorization': 'Bearer ' + accessToken }
-          }
+        // Pobierz istniejące opinie z DB zanim zaczniemy sync
+        // Dzięki temu wiemy co jest "naprawdę nowe" vs "import historyczny"
+        const { data: existingReviews } = await supabase
+          .from('reviews')
+          .select('google_review_id, comment')
+          .eq('business_id', business.id)
+
+        const existingReviewMap = new Map(
+          existingReviews?.map(r => [r.google_review_id, r]) || []
+        )
+        const isInitialImport = existingReviewMap.size === 0
+
+        // Pobierz wszystkie opinie ze wszystkich stron (paginacja)
+        const allReviews = await fetchAllReviews(
+          business.google_account_id,
+          business.google_location_id,
+          accessToken
         )
 
-        const reviewsData = await reviewsResponse.json()
+        for (const review of allReviews) {
+          const existing = existingReviewMap.get(review.reviewId)
 
-        if (reviewsData.reviews) {
-          for (const review of reviewsData.reviews) {
-            const { data: existingReview } = await supabase
-              .from('reviews')
-              .select('id, comment')
-              .eq('google_review_id', review.reviewId)
-              .single()
+          // Jeśli to pierwszy import (baza pusta) — nie oznaczaj jako nowe
+          const isNew = !existing && !isInitialImport
+          const isEdited = !!existing && existing.comment !== (review.comment || '')
 
-            const isNew = !existingReview
-            const isEdited = existingReview && existingReview.comment !== (review.comment || '')
+          const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
+          const starRating = ratingMap[review.starRating] || 0
 
-            const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
-            const starRating = ratingMap[review.starRating] || 0
+          await supabase.from('reviews').upsert({
+            business_id: business.id,
+            google_review_id: review.reviewId,
+            reviewer_name: review.reviewer?.displayName || 'Anonim',
+            star_rating: starRating,
+            comment: review.comment || '',
+            has_reply: !!review.reviewReply,
+            reply_comment: review.reviewReply?.comment || null,
+            is_new: isNew,
+            is_edited: isEdited,
+            create_time: review.createTime
+          }, {
+            onConflict: 'google_review_id'
+          })
 
-            await supabase.from('reviews').upsert({
+          if (isNew) {
+            totalNewReviews++
+
+            await supabase.from('alerts').insert({
+              user_id: connection.user_id,
               business_id: business.id,
-              google_review_id: review.reviewId,
-              reviewer_name: review.reviewer?.displayName || 'Anonim',
-              star_rating: starRating,
-              comment: review.comment || '',
-              has_reply: !!review.reviewReply,
-              reply_comment: review.reviewReply?.comment || null,
-              is_new: isNew,
-              is_edited: isEdited,
-              create_time: review.createTime
-            }, {
-              onConflict: 'google_review_id'
+              alert_type: 'NEW_REVIEW',
+              title: 'Nowa opinia ' + starRating + '★',
+              message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
+              is_read: false
             })
 
-            if (isNew) {
-              totalNewReviews++
+            if (alertSettings && alertSettings.length > 0) {
+              for (const setting of alertSettings) {
+                const matchesBusiness = !setting.business_id || setting.business_id === business.id
+                const matchesStars = starRating >= setting.min_stars && starRating <= setting.max_stars
 
-              // Utwórz alert w systemie
-              await supabase.from('alerts').insert({
-                user_id: connection.user_id,
-                business_id: business.id,
-                alert_type: 'NEW_REVIEW',
-                title: 'Nowa opinia ' + starRating + '★',
-                message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
-                is_read: false
-              })
-
-              // Sprawdź czy wysłać email na podstawie ustawień
-              if (alertSettings && alertSettings.length > 0) {
-                for (const setting of alertSettings) {
-                  // Sprawdź czy reguła pasuje
-                  const matchesBusiness = !setting.business_id || setting.business_id === business.id
-                  const matchesStars = starRating >= setting.min_stars && starRating <= setting.max_stars
-
-                  if (matchesBusiness && matchesStars && setting.email_address) {
-                    await sendEmail(
-                      setting.email_address,
-                      'Nowa opinia ' + starRating + '★ - ' + business.title,
-                      `
-                        <h2>Nowa opinia dla ${business.title}</h2>
-                        <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
-                        <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
-                        <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
-                        <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
-                      `
-                    )
-                  }
+                if (matchesBusiness && matchesStars && setting.email_address) {
+                  await sendEmail(
+                    setting.email_address,
+                    'Nowa opinia ' + starRating + '★ - ' + business.title,
+                    `
+                      <h2>Nowa opinia dla ${business.title}</h2>
+                      <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
+                      <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
+                      <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
+                      <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
+                    `
+                  )
                 }
               }
             }
-
-            if (isEdited) {
-              await supabase.from('alerts').insert({
-                user_id: connection.user_id,
-                business_id: business.id,
-                alert_type: 'EDITED_REVIEW',
-                title: 'Edytowana opinia',
-                message: (review.reviewer?.displayName || 'Ktos') + ' zmienil opinie dla ' + business.title,
-                is_read: false
-              })
-            }
           }
 
-          // Przelicz i zaktualizuj statystyki wizytówki na podstawie zsynchronizowanych opinii
-          const { data: allReviews } = await supabase
-            .from('reviews')
-            .select('star_rating')
-            .eq('business_id', business.id)
-
-          if (allReviews && allReviews.length > 0) {
-            const totalReviews = allReviews.length
-            const avgRating = (allReviews.reduce((sum, r) => sum + r.star_rating, 0) / totalReviews).toFixed(1)
-
-            await supabase
-              .from('businesses')
-              .update({ total_reviews: totalReviews, average_rating: avgRating })
-              .eq('id', business.id)
+          if (isEdited) {
+            await supabase.from('alerts').insert({
+              user_id: connection.user_id,
+              business_id: business.id,
+              alert_type: 'EDITED_REVIEW',
+              title: 'Edytowana opinia',
+              message: (review.reviewer?.displayName || 'Ktos') + ' zmienil opinie dla ' + business.title,
+              is_read: false
+            })
           }
+        }
+
+        // Przelicz i zaktualizuj statystyki wizytówki na podstawie zsynchronizowanych opinii
+        const { data: allDbReviews } = await supabase
+          .from('reviews')
+          .select('star_rating')
+          .eq('business_id', business.id)
+
+        if (allDbReviews && allDbReviews.length > 0) {
+          const totalReviews = allDbReviews.length
+          const avgRating = (allDbReviews.reduce((sum, r) => sum + r.star_rating, 0) / totalReviews).toFixed(1)
+
+          await supabase
+            .from('businesses')
+            .update({ total_reviews: totalReviews, average_rating: avgRating })
+            .eq('id', business.id)
         }
       } catch (e) {
         console.error('Reviews fetch error:', e)
