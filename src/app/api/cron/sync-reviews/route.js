@@ -141,11 +141,15 @@ export async function GET(request) {
           accessToken
         )
 
+        // Próg "świeżości" — opinia musi być młodsza niż 20 minut żeby uznać ją za nową
+        const freshnessThreshold = new Date(Date.now() - 20 * 60 * 1000)
+
         for (const review of allReviews) {
           const existing = existingReviewMap.get(review.reviewId)
+          const reviewDate = review.createTime ? new Date(review.createTime) : null
 
-          // Jeśli to pierwszy import (baza pusta) — nie oznaczaj jako nowe
-          const isNew = !existing && !isInitialImport
+          // Opinia jest nowa tylko jeśli: nie ma jej w DB ORAZ została wystawiona niedawno
+          const isNew = !existing && !!reviewDate && reviewDate > freshnessThreshold
           const isEdited = !!existing && existing.comment !== (review.comment || '')
 
           const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
