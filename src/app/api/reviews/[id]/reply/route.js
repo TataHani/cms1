@@ -87,10 +87,12 @@ export async function POST(request, { params }) {
     }
   }
 
-  // Wyślij odpowiedź do Google Business Profile API
-  const googleUrl = 'https://mybusiness.googleapis.com/v4/' +
-    business.google_account_id + '/' +
-    business.google_location_id + '/reviews/' +
+  // Wyślij odpowiedź do Google Business Profile API (nowe API v1)
+  // google_location_id = "locations/17225425815097466535" — wyciągamy sam numer
+  const locationId = business.google_location_id.replace('locations/', '')
+
+  const googleUrl = 'https://mybusinessreviews.googleapis.com/v1/locations/' +
+    locationId + '/reviews/' +
     review.google_review_id + '/reply'
 
   const googleResponse = await fetch(googleUrl, {

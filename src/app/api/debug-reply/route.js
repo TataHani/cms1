@@ -50,9 +50,9 @@ export async function GET(request) {
     .eq('id', business.google_connection_id)
     .single()
 
-  const replyUrl = 'https://mybusiness.googleapis.com/v4/' +
-    business.google_account_id + '/' +
-    business.google_location_id + '/reviews/' +
+  const locationId = business.google_location_id.replace('locations/', '')
+  const replyUrl = 'https://mybusinessreviews.googleapis.com/v1/locations/' +
+    locationId + '/reviews/' +
     review.google_review_id + '/reply'
 
   // Wywołaj Google API i zwróć pełną odpowiedź
