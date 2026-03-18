@@ -55,6 +55,15 @@ export async function GET(request) {
     locationId + '/reviews/' +
     review.google_review_id + '/reply'
 
+  // Sprawdź jakie scope ma token
+  let tokenInfo = null
+  try {
+    const tiRes = await fetch('https://www.googleapis.com/oauth2/v1/tokeninfo?access_token=' + connection.access_token)
+    tokenInfo = await tiRes.json()
+  } catch (e) {
+    tokenInfo = 'error: ' + e.message
+  }
+
   // Pobierz opinie z v4 API żeby zobaczyć jak wygląda review.name
   let v4ReviewsStatus = null
   let v4ReviewSample = null
@@ -92,7 +101,30 @@ export async function GET(request) {
     v1ReviewSample = 'error: ' + e.message
   }
 
+  // Spróbuj PUT z v4 API (poprawny format z review.name)
+  let v4PutStatus = null
+  let v4PutResponse = null
+  if (v4ReviewSample?.name) {
+    try {
+      const v4PutUrl = 'https://mybusiness.googleapis.com/v4/' + v4ReviewSample.name + '/reply'
+      const v4PutRes = await fetch(v4PutUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': 'Bearer ' + connection.access_token,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ comment: 'TEST debug - prosze zignorowac' })
+      })
+      v4PutStatus = v4PutRes.status
+      const text = await v4PutRes.text()
+      try { v4PutResponse = JSON.parse(text) } catch { v4PutResponse = text.substring(0, 300) }
+    } catch (e) {
+      v4PutResponse = 'error: ' + e.message
+    }
+  }
+
   return Response.json({
+    token_scopes: tokenInfo?.scope || tokenInfo,
     stored_in_db: {
       google_review_id: review.google_review_id,
       google_account_id: business.google_account_id,
@@ -101,6 +133,8 @@ export async function GET(request) {
     v4_reviews_status: v4ReviewsStatus,
     v4_review_name_sample: v4ReviewSample,
     v1_reviews_status: v1ReviewsStatus,
-    v1_response: v1ReviewSample
+    v1_response: v1ReviewSample,
+    v4_put_test_status: v4PutStatus,
+    v4_put_test_response: v4PutResponse
   })
 }
