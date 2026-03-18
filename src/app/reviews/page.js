@@ -12,6 +12,7 @@ export default function ReviewsPage() {
   const [replyingTo, setReplyingTo] = useState(null)
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
+  const [sendError, setSendError] = useState(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -38,23 +39,27 @@ export default function ReviewsPage() {
   const sendReply = async (reviewId) => {
     if (!replyText.trim()) return
     setSending(true)
+    setSendError(null)
     try {
       const res = await fetch('/api/reviews/' + reviewId + '/reply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reply: replyText })
       })
+      const data = await res.json()
       if (res.ok) {
-        setReviews(reviews.map(r => 
-          r.id === reviewId 
+        setReviews(reviews.map(r =>
+          r.id === reviewId
             ? { ...r, has_reply: true, reply_comment: replyText }
             : r
         ))
         setReplyingTo(null)
         setReplyText('')
+      } else {
+        setSendError(data.error || 'Błąd wysyłania odpowiedzi')
       }
     } catch (e) {
-      console.error(e)
+      setSendError('Błąd połączenia')
     }
     setSending(false)
   }
@@ -180,14 +185,17 @@ export default function ReviewsPage() {
                     className="w-full p-3 border border-slate-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     rows={3}
                   />
+                  {sendError && (
+                    <p className="text-sm text-rose-600 mt-2">{sendError}</p>
+                  )}
                   <div className="flex items-center justify-end gap-2 mt-3">
-                    <button 
-                      onClick={() => { setReplyingTo(null); setReplyText(''); }}
+                    <button
+                      onClick={() => { setReplyingTo(null); setReplyText(''); setSendError(null) }}
                       className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium"
                     >
                       Anuluj
                     </button>
-                    <button 
+                    <button
                       onClick={() => sendReply(review.id)}
                       disabled={sending || !replyText.trim()}
                       className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
