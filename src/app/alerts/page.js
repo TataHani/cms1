@@ -30,7 +30,26 @@ export default function AlertsPage() {
     }
   }
 
+  const deleteAlert = async (alertId) => {
+    try {
+      await fetch('/api/alerts?id=' + alertId, { method: 'DELETE' })
+      setAlerts(alerts.filter(a => a.id !== alertId))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const deleteReadAlerts = async () => {
+    try {
+      await fetch('/api/alerts', { method: 'DELETE' })
+      setAlerts(alerts.filter(a => !a.is_read))
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const unreadCount = alerts.filter(a => !a.is_read).length
+  const readCount = alerts.filter(a => a.is_read).length
 
   if (loading) {
     return (
@@ -58,6 +77,15 @@ export default function AlertsPage() {
               </span>
             )}
           </div>
+          {readCount > 0 && (
+            <button
+              onClick={deleteReadAlerts}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200"
+            >
+              <Trash2 size={16} />
+              Usuń przeczytane ({readCount})
+            </button>
+          )}
         </div>
       </header>
 
@@ -73,8 +101,8 @@ export default function AlertsPage() {
         ) : (
           <div className="space-y-3">
             {alerts.map((alert) => (
-              <div 
-                key={alert.id} 
+              <div
+                key={alert.id}
                 className={`bg-white rounded-xl border p-4 flex items-start gap-4 ${alert.is_read ? 'border-slate-200' : 'border-emerald-300 bg-emerald-50'}`}
               >
                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
@@ -95,15 +123,24 @@ export default function AlertsPage() {
                         {new Date(alert.created_at).toLocaleString('pl-PL')}
                       </p>
                     </div>
-                    {!alert.is_read && (
-                      <button 
-                        onClick={() => markAsRead(alert.id)}
+                    <div className="flex items-center gap-1">
+                      {!alert.is_read && (
+                        <button
+                          onClick={() => markAsRead(alert.id)}
+                          className="p-2 hover:bg-slate-100 rounded-lg"
+                          title="Oznacz jako przeczytane"
+                        >
+                          <CheckCircle size={18} className="text-emerald-600" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => deleteAlert(alert.id)}
                         className="p-2 hover:bg-slate-100 rounded-lg"
-                        title="Oznacz jako przeczytane"
+                        title="Usuń alert"
                       >
-                        <CheckCircle size={18} className="text-emerald-600" />
+                        <Trash2 size={18} className="text-slate-400 hover:text-rose-500" />
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               </div>

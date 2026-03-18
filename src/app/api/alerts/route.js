@@ -58,3 +58,42 @@ export async function GET() {
 
   return Response.json({ alerts })
 }
+
+export async function DELETE(request) {
+  const cookieStore = cookies()
+  const userId = cookieStore.get('user_id')?.value
+
+  if (!userId) {
+    return Response.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
+  const { searchParams } = new URL(request.url)
+  const alertId = searchParams.get('id')
+
+  if (alertId) {
+    // Usuń pojedynczy alert (tylko swój)
+    const { error } = await supabase
+      .from('alerts')
+      .delete()
+      .eq('id', alertId)
+      .eq('user_id', userId)
+
+    if (error) {
+      return Response.json({ error: error.message }, { status: 500 })
+    }
+    return Response.json({ success: true })
+  }
+
+  // Usuń wszystkie przeczytane alerty użytkownika
+  const { error } = await supabase
+    .from('alerts')
+    .delete()
+    .eq('user_id', userId)
+    .eq('is_read', true)
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 })
+  }
+
+  return Response.json({ success: true })
+}
