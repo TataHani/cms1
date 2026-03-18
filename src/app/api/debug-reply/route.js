@@ -78,7 +78,6 @@ export async function GET(request) {
   }
 
   // Spróbuj pobrać opinie też z v1 API
-  const locationId = business.google_location_id.replace('locations/', '')
   let v1ReviewsStatus = null
   let v1ReviewSample = null
   try {
