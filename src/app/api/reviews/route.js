@@ -28,11 +28,14 @@ export async function GET() {
       .select('id')
     businessIds = businesses?.map(b => b.id) || []
   } else {
-    const { data: permissions } = await supabase
-      .from('business_permissions')
-      .select('business_id')
-      .eq('user_id', userId)
-    businessIds = permissions?.map(p => p.business_id) || []
+    const [ownResult, permResult] = await Promise.all([
+      supabase.from('businesses').select('id').eq('user_id', userId),
+      supabase.from('business_permissions').select('business_id').eq('user_id', userId)
+    ])
+
+    const ownIds = (ownResult.data || []).map(b => b.id)
+    const permIds = (permResult.data || []).map(p => p.business_id)
+    businessIds = [...new Set([...ownIds, ...permIds])]
   }
 
   if (businessIds.length === 0) {

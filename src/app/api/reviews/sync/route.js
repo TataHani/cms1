@@ -72,43 +72,52 @@ export async function GET() {
 
   for (const business of businesses) {
     try {
-      const reviewsResponse = await fetch(
-      'https://mybusiness.googleapis.com/v4/' + business.google_account_id + '/' + business.google_location_id + '/reviews',
-        {
+      const accountId = business.google_account_id.replace('accounts/', '')
+      const locationId = business.google_location_id.replace('locations/', '')
+      let pageToken = null
+
+      do {
+        const url = 'https://mybusiness.googleapis.com/v4/accounts/' + accountId + '/locations/' + locationId + '/reviews'
+          + (pageToken ? '?pageToken=' + pageToken : '')
+
+        const reviewsResponse = await fetch(url, {
           headers: { 'Authorization': 'Bearer ' + accessToken }
+        })
+
+        const reviewsData = await reviewsResponse.json()
+
+        if (reviewsData.reviews) {
+          for (const review of reviewsData.reviews) {
+            const existingReview = await supabase
+              .from('reviews')
+              .select('id, comment')
+              .eq('google_review_id', review.reviewId)
+              .single()
+
+            const isEdited = existingReview?.data && existingReview.data.comment !== review.comment
+
+            await supabase.from('reviews').upsert({
+              business_id: business.id,
+              google_review_id: review.reviewId,
+              reviewer_name: review.reviewer?.displayName || 'Anonim',
+              star_rating: parseInt(review.starRating?.replace('STAR_RATING_', '').replace('ONE', '1').replace('TWO', '2').replace('THREE', '3').replace('FOUR', '4').replace('FIVE', '5')) || 0,
+              comment: review.comment || '',
+              has_reply: !!review.reviewReply,
+              reply_comment: review.reviewReply?.comment || null,
+              is_new: !existingReview?.data,
+              is_edited: isEdited,
+              create_time: review.createTime
+            }, {
+              onConflict: 'google_review_id'
+            })
+
+            totalImported++
+          }
         }
-      )
 
-      const reviewsData = await reviewsResponse.json()
+        pageToken = reviewsData.nextPageToken || null
+      } while (pageToken)
 
-      if (reviewsData.reviews) {
-        for (const review of reviewsData.reviews) {
-          const existingReview = await supabase
-            .from('reviews')
-            .select('id, comment')
-            .eq('google_review_id', review.reviewId)
-            .single()
-
-          const isEdited = existingReview?.data && existingReview.data.comment !== review.comment
-
-          await supabase.from('reviews').upsert({
-            business_id: business.id,
-            google_review_id: review.reviewId,
-            reviewer_name: review.reviewer?.displayName || 'Anonim',
-            star_rating: parseInt(review.starRating?.replace('STAR_RATING_', '').replace('ONE', '1').replace('TWO', '2').replace('THREE', '3').replace('FOUR', '4').replace('FIVE', '5')) || 0,
-            comment: review.comment || '',
-            has_reply: !!review.reviewReply,
-            reply_comment: review.reviewReply?.comment || null,
-            is_new: !existingReview?.data,
-            is_edited: isEdited,
-            create_time: review.createTime
-          }, {
-            onConflict: 'google_review_id'
-          })
-
-          totalImported++
-        }
-      }
     } catch (e) {
       console.error('Error fetching reviews for', business.title, e)
     }
