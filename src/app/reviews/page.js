@@ -64,9 +64,13 @@ export default function ReviewsPage() {
     setSending(false)
   }
 
+  // Cutoff dla "bez odpowiedzi" - historyczne opinie sprzed maja 2026 ignorujemy
+  const UNANSWERED_CUTOFF = new Date('2026-05-01')
+  const isUnansweredRelevant = (r) => !r.has_reply && new Date(r.create_time) >= UNANSWERED_CUTOFF
+
   const filteredReviews = reviews
     .filter(r => selectedBusiness === 'all' || r.business_id === selectedBusiness)
-    .filter(r => !onlyUnanswered || !r.has_reply)
+    .filter(r => !onlyUnanswered || isUnansweredRelevant(r))
 
   const getBusinessName = (businessId) => {
     const business = businesses.find(b => b.id === businessId)
@@ -74,7 +78,7 @@ export default function ReviewsPage() {
   }
 
   const newCount = reviews.filter(r => r.is_new).length
-  const pendingCount = reviews.filter(r => !r.has_reply).length
+  const pendingCount = reviews.filter(isUnansweredRelevant).length
 
   if (loading) {
     return (
@@ -127,7 +131,7 @@ export default function ReviewsPage() {
             onClick={() => setOnlyUnanswered(!onlyUnanswered)}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${onlyUnanswered ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
-            {onlyUnanswered ? '✕ Bez odpowiedzi' : 'Bez odpowiedzi'}
+            {onlyUnanswered ? '✕ Bez odpowiedzi (od maja 2026)' : 'Bez odpowiedzi (od maja 2026)'}
           </button>
         </div>
 

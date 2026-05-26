@@ -66,11 +66,14 @@ export async function GET(request) {
   const { data: reviews } = await reviewsQuery
   const allReviews = reviews || []
 
+  // Cutoff dla "bez odpowiedzi" - historyczne opinie sprzed maja 2026 ignorujemy
+  const UNANSWERED_CUTOFF = new Date('2026-05-01')
+
   const totalReviews = allReviews.length
   const avgRating = totalReviews > 0
     ? (allReviews.reduce((sum, r) => sum + r.star_rating, 0) / totalReviews).toFixed(1)
     : 0
-  const unanswered = allReviews.filter(r => !r.has_reply).length
+  const unanswered = allReviews.filter(r => !r.has_reply && new Date(r.create_time) >= UNANSWERED_CUTOFF).length
   const newReviews = allReviews.filter(r => r.is_new).length
 
   const distribution = [1, 2, 3, 4, 5].map(stars => ({
