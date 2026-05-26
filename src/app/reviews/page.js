@@ -131,7 +131,7 @@ export default function ReviewsPage() {
             onClick={() => setOnlyUnanswered(!onlyUnanswered)}
             className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${onlyUnanswered ? 'bg-rose-500 text-white border-rose-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
           >
-            {onlyUnanswered ? '✕ Bez odpowiedzi (od maja 2026)' : 'Bez odpowiedzi (od maja 2026)'}
+            {onlyUnanswered ? '✕ Bez odpowiedzi' : 'Bez odpowiedzi'}
           </button>
         </div>
 
