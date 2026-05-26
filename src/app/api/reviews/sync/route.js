@@ -6,6 +6,66 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+async function refreshAccessToken(connection) {
+  if (new Date(connection.token_expires_at) >= new Date()) {
+    return connection.access_token
+  }
+
+  const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: connection.refresh_token,
+      grant_type: 'refresh_token',
+    }),
+  })
+
+  const refreshData = await refreshResponse.json()
+
+  if (!refreshData.access_token) {
+    return null
+  }
+
+  await supabase
+    .from('google_connections')
+    .update({
+      access_token: refreshData.access_token,
+      token_expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString()
+    })
+    .eq('id', connection.id)
+
+  return refreshData.access_token
+}
+
+async function fetchAllReviews(accountId, locationId, accessToken) {
+  let allReviews = []
+  let pageToken = null
+
+  do {
+    const url = new URL(
+      'https://mybusiness.googleapis.com/v4/accounts/' + accountId + '/locations/' + locationId + '/reviews'
+    )
+    url.searchParams.set('pageSize', '50')
+    if (pageToken) url.searchParams.set('pageToken', pageToken)
+
+    const response = await fetch(url.toString(), {
+      headers: { 'Authorization': 'Bearer ' + accessToken }
+    })
+
+    const data = await response.json()
+
+    if (data.reviews) {
+      allReviews = allReviews.concat(data.reviews)
+    }
+
+    pageToken = data.nextPageToken || null
+  } while (pageToken)
+
+  return allReviews
+}
+
 export async function GET() {
   const cookieStore = cookies()
   const userId = cookieStore.get('user_id')?.value
@@ -14,114 +74,96 @@ export async function GET() {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })
   }
 
-  // Pobierz połączenie Google
-  const { data: connection } = await supabase
+  // Pobierz WSZYSTKIE połączenia Google użytkownika (nie tylko najnowsze)
+  const { data: connections } = await supabase
     .from('google_connections')
     .select('*')
     .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
 
-  if (!connection) {
+  if (!connections || connections.length === 0) {
     return Response.json({ error: 'Brak polaczonego konta Google' }, { status: 400 })
   }
 
-  let accessToken = connection.access_token
-
-  // Odśwież token jeśli wygasł
-  if (new Date(connection.token_expires_at) < new Date()) {
-    const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        refresh_token: connection.refresh_token,
-        grant_type: 'refresh_token',
-      }),
-    })
-
-    const refreshData = await refreshResponse.json()
-
-    if (refreshData.access_token) {
-      accessToken = refreshData.access_token
-      await supabase
-        .from('google_connections')
-        .update({
-          access_token: accessToken,
-          token_expires_at: new Date(Date.now() + refreshData.expires_in * 1000).toISOString()
-        })
-        .eq('id', connection.id)
-    } else {
-      return Response.json({ error: 'Nie udalo sie odswiezyc tokenu' }, { status: 401 })
-    }
-  }
-
-  // Pobierz wizytówki użytkownika
-  const { data: businesses } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('user_id', userId)
-
-  if (!businesses || businesses.length === 0) {
-    return Response.json({ error: 'Brak wizytowek' }, { status: 404 })
-  }
-
+  const errors = []
   let totalImported = 0
+  const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
 
-  for (const business of businesses) {
-    try {
-      const accountId = business.google_account_id.replace('accounts/', '')
-      const locationId = business.google_location_id.replace('locations/', '')
-      let pageToken = null
+  for (const connection of connections) {
+    const accessToken = await refreshAccessToken(connection)
+    if (!accessToken) {
+      errors.push('Nie udalo sie odswiezyc tokenu dla konta ' + (connection.google_email || connection.id))
+      continue
+    }
 
-      do {
-        const url = 'https://mybusiness.googleapis.com/v4/accounts/' + accountId + '/locations/' + locationId + '/reviews'
-          + (pageToken ? '?pageToken=' + pageToken : '')
+    // Pobierz wizytówki należące do TEGO konkretnego połączenia
+    // (a nie wszystkie wizytówki usera - inaczej używamy złego tokenu)
+    const { data: businesses } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('google_connection_id', connection.id)
 
-        const reviewsResponse = await fetch(url, {
-          headers: { 'Authorization': 'Bearer ' + accessToken }
-        })
+    if (!businesses || businesses.length === 0) continue
 
-        const reviewsData = await reviewsResponse.json()
+    for (const business of businesses) {
+      try {
+        const accountId = business.google_account_id.replace('accounts/', '')
+        const locationId = business.google_location_id.replace('locations/', '')
 
-        if (reviewsData.reviews) {
-          for (const review of reviewsData.reviews) {
-            const existingReview = await supabase
-              .from('reviews')
-              .select('id, comment')
-              .eq('google_review_id', review.reviewId)
-              .single()
+        const allReviews = await fetchAllReviews(accountId, locationId, accessToken)
 
-            const isEdited = existingReview?.data && existingReview.data.comment !== review.comment
+        for (const review of allReviews) {
+          const existingReview = await supabase
+            .from('reviews')
+            .select('id, comment')
+            .eq('google_review_id', review.reviewId)
+            .single()
 
-            await supabase.from('reviews').upsert({
-              business_id: business.id,
-              google_review_id: review.reviewId,
-              reviewer_name: review.reviewer?.displayName || 'Anonim',
-              star_rating: parseInt(review.starRating?.replace('STAR_RATING_', '').replace('ONE', '1').replace('TWO', '2').replace('THREE', '3').replace('FOUR', '4').replace('FIVE', '5')) || 0,
-              comment: review.comment || '',
-              has_reply: !!review.reviewReply,
-              reply_comment: review.reviewReply?.comment || null,
-              is_new: !existingReview?.data,
-              is_edited: isEdited,
-              create_time: review.createTime
-            }, {
-              onConflict: 'google_review_id'
-            })
+          const isEdited = existingReview?.data && existingReview.data.comment !== (review.comment || '')
+          const starRating = ratingMap[review.starRating] || 0
 
-            totalImported++
-          }
+          await supabase.from('reviews').upsert({
+            business_id: business.id,
+            google_review_id: review.reviewId,
+            reviewer_name: review.reviewer?.displayName || 'Anonim',
+            star_rating: starRating,
+            comment: review.comment || '',
+            has_reply: !!review.reviewReply,
+            reply_comment: review.reviewReply?.comment || null,
+            reply_update_time: review.reviewReply?.updateTime || null,
+            is_new: !existingReview?.data,
+            is_edited: isEdited,
+            create_time: review.createTime
+          }, {
+            onConflict: 'google_review_id'
+          })
+
+          totalImported++
         }
 
-        pageToken = reviewsData.nextPageToken || null
-      } while (pageToken)
+        // Przelicz statystyki wizytówki
+        const { data: allDbReviews } = await supabase
+          .from('reviews')
+          .select('star_rating')
+          .eq('business_id', business.id)
 
-    } catch (e) {
-      console.error('Error fetching reviews for', business.title, e)
+        if (allDbReviews && allDbReviews.length > 0) {
+          const totalReviews = allDbReviews.length
+          const avgRating = (allDbReviews.reduce((sum, r) => sum + r.star_rating, 0) / totalReviews).toFixed(1)
+
+          await supabase
+            .from('businesses')
+            .update({ total_reviews: totalReviews, average_rating: avgRating })
+            .eq('id', business.id)
+        }
+      } catch (e) {
+        errors.push('Blad pobierania opinii dla ' + business.title + ': ' + e.message)
+      }
     }
   }
 
-  return Response.json({ success: true, imported: totalImported })
+  return Response.json({
+    success: true,
+    imported: totalImported,
+    errors: errors.length > 0 ? errors : undefined
+  })
 }
