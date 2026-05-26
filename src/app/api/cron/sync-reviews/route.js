@@ -130,6 +130,7 @@ export async function GET(request) {
           .from('reviews')
           .select('google_review_id, comment')
           .eq('business_id', business.id)
+          .limit(50000)
 
         const existingReviewMap = new Map(
           existingReviews?.map(r => [r.google_review_id, r]) || []
@@ -224,6 +225,7 @@ export async function GET(request) {
           .from('reviews')
           .select('star_rating')
           .eq('business_id', business.id)
+          .limit(50000)
 
         if (allDbReviews && allDbReviews.length > 0) {
           const totalReviews = allDbReviews.length

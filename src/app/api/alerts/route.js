@@ -27,6 +27,7 @@ export async function GET() {
       .from('alerts')
       .select('*')
       .order('created_at', { ascending: false })
+      .limit(50000)
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 })
@@ -49,6 +50,7 @@ export async function GET() {
       .select('*')
       .in('business_id', businessIds)
       .order('created_at', { ascending: false })
+      .limit(50000)
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 })

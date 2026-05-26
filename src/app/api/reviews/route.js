@@ -47,6 +47,7 @@ export async function GET() {
     .select('*')
     .in('business_id', businessIds)
     .order('create_time', { ascending: false })
+    .limit(50000)
 
   if (error) {
     return Response.json({ error: error.message }, { status: 500 })

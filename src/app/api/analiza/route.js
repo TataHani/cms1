@@ -51,7 +51,7 @@ export async function GET(request) {
     ? businesses.map(b => b.id)
     : businessIds.split(',').filter(id => businesses.find(b => b.id === id))
 
-  let reviewsQuery = supabase.from('reviews').select('*').in('business_id', selectedIds)
+  let reviewsQuery = supabase.from('reviews').select('*').in('business_id', selectedIds).limit(50000)
 
   if (period === 'custom' && dateFrom) {
     reviewsQuery = reviewsQuery.gte('create_time', dateFrom)

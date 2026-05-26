@@ -147,6 +147,7 @@ export async function GET() {
           .from('reviews')
           .select('star_rating')
           .eq('business_id', business.id)
+          .limit(50000)
 
         if (allDbReviews && allDbReviews.length > 0) {
           const totalReviews = allDbReviews.length
