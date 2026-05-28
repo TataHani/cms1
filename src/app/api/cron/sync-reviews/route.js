@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 
-export const maxDuration = 300
+export const maxDuration = 800
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -29,7 +29,7 @@ async function sendEmail(to, subject, html) {
   }
 }
 
-async function fetchAllReviews(accountId, locationId, accessToken) {
+async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
   let allReviews = []
   let pageToken = null
 
@@ -38,6 +38,7 @@ async function fetchAllReviews(accountId, locationId, accessToken) {
       'https://mybusiness.googleapis.com/v4/' + accountId + '/' + locationId + '/reviews'
     )
     url.searchParams.set('pageSize', '50')
+    url.searchParams.set('orderBy', 'updateTime desc')
     if (pageToken) url.searchParams.set('pageToken', pageToken)
 
     const response = await fetch(url.toString(), {
@@ -48,10 +49,23 @@ async function fetchAllReviews(accountId, locationId, accessToken) {
 
     if (data.reviews) {
       allReviews = allReviews.concat(data.reviews)
+
+      if (stopAtTime) {
+        const lastReview = data.reviews[data.reviews.length - 1]
+        if (lastReview?.updateTime && new Date(lastReview.updateTime) < stopAtTime) {
+          break
+        }
+      }
     }
 
     pageToken = data.nextPageToken || null
   } while (pageToken)
+
+  if (stopAtTime) {
+    allReviews = allReviews.filter(r =>
+      r.updateTime && new Date(r.updateTime) >= stopAtTime
+    )
+  }
 
   return allReviews
 }
@@ -137,11 +151,26 @@ export async function GET(request) {
         )
         const isInitialImport = existingReviewMap.size === 0
 
-        // Pobierz wszystkie opinie ze wszystkich stron (paginacja)
+        // Inkrementalny sync: pobierz max(update_time) z DB i ściągaj tylko nowsze.
+        // Margines 1h - bufor na edytowane opinie i opóźnienia Google API.
+        const { data: latestReview } = await supabase
+          .from('reviews')
+          .select('update_time')
+          .eq('business_id', business.id)
+          .not('update_time', 'is', null)
+          .order('update_time', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const stopAtTime = latestReview?.update_time
+          ? new Date(new Date(latestReview.update_time).getTime() - 60 * 60 * 1000)
+          : null
+
         const allReviews = await fetchAllReviews(
           business.google_account_id,
           business.google_location_id,
-          accessToken
+          accessToken,
+          stopAtTime
         )
 
         // Próg "świeżości" — opinia musi być młodsza niż 20 minut żeby uznać ją za nową
@@ -169,7 +198,8 @@ export async function GET(request) {
             reply_update_time: review.reviewReply?.updateTime || null,
             is_new: isNew,
             is_edited: isEdited,
-            create_time: review.createTime
+            create_time: review.createTime,
+            update_time: review.updateTime
           }, {
             onConflict: 'google_review_id'
           })

@@ -41,7 +41,7 @@ async function refreshAccessToken(connection) {
   return refreshData.access_token
 }
 
-async function fetchAllReviews(accountId, locationId, accessToken) {
+async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
   let allReviews = []
   let pageToken = null
 
@@ -50,6 +50,7 @@ async function fetchAllReviews(accountId, locationId, accessToken) {
       'https://mybusiness.googleapis.com/v4/accounts/' + accountId + '/locations/' + locationId + '/reviews'
     )
     url.searchParams.set('pageSize', '50')
+    url.searchParams.set('orderBy', 'updateTime desc')
     if (pageToken) url.searchParams.set('pageToken', pageToken)
 
     const response = await fetch(url.toString(), {
@@ -60,10 +61,23 @@ async function fetchAllReviews(accountId, locationId, accessToken) {
 
     if (data.reviews) {
       allReviews = allReviews.concat(data.reviews)
+
+      if (stopAtTime) {
+        const lastReview = data.reviews[data.reviews.length - 1]
+        if (lastReview?.updateTime && new Date(lastReview.updateTime) < stopAtTime) {
+          break
+        }
+      }
     }
 
     pageToken = data.nextPageToken || null
   } while (pageToken)
+
+  if (stopAtTime) {
+    allReviews = allReviews.filter(r =>
+      r.updateTime && new Date(r.updateTime) >= stopAtTime
+    )
+  }
 
   return allReviews
 }
@@ -111,7 +125,21 @@ export async function GET() {
         const accountId = business.google_account_id.replace('accounts/', '')
         const locationId = business.google_location_id.replace('locations/', '')
 
-        const allReviews = await fetchAllReviews(accountId, locationId, accessToken)
+        // Inkrementalny sync: pobierz max(update_time) z DB, ściągaj tylko nowsze (margines 1h)
+        const { data: latestReview } = await supabase
+          .from('reviews')
+          .select('update_time')
+          .eq('business_id', business.id)
+          .not('update_time', 'is', null)
+          .order('update_time', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const stopAtTime = latestReview?.update_time
+          ? new Date(new Date(latestReview.update_time).getTime() - 60 * 60 * 1000)
+          : null
+
+        const allReviews = await fetchAllReviews(accountId, locationId, accessToken, stopAtTime)
 
         for (const review of allReviews) {
           const existingReview = await supabase
@@ -134,7 +162,8 @@ export async function GET() {
             reply_update_time: review.reviewReply?.updateTime || null,
             is_new: !existingReview?.data,
             is_edited: isEdited,
-            create_time: review.createTime
+            create_time: review.createTime,
+            update_time: review.updateTime
           }, {
             onConflict: 'google_review_id'
           })
