@@ -79,6 +79,7 @@ export async function GET() {
     }
 
     let importedCount = 0
+    const skipped = []
 
     for (const account of accountsData.accounts) {
       const locationsResponse = await fetch(
@@ -92,6 +93,25 @@ export async function GET() {
 
       if (locationsData.locations) {
         for (const location of locationsData.locations) {
+          // Blokada duplikatu: jezeli ta wizytowka jest juz w systemie u INNEGO usera
+          // (a current user jej nie ma), pomin - admin nadaje dostep przez business_permissions
+          const { data: existing } = await supabase
+            .from('businesses')
+            .select('user_id')
+            .eq('google_location_id', location.name)
+
+          const hasOwn = existing?.some(e => e.user_id === userId)
+          const hasOthers = existing?.some(e => e.user_id !== userId)
+
+          if (hasOthers && !hasOwn) {
+            skipped.push({
+              title: location.title || 'Bez nazwy',
+              google_location_id: location.name,
+              reason: 'Wizytowka juz istnieje w systemie pod kontem innego uzytkownika. Popros admina o nadanie uprawnien w panelu admin -> Uprawnienia.'
+            })
+            continue
+          }
+
           await supabase.from('businesses').upsert({
             user_id: userId,
             google_connection_id: connection.id,
@@ -111,7 +131,7 @@ export async function GET() {
       }
     }
 
-    return Response.json({ success: true, imported: importedCount })
+    return Response.json({ success: true, imported: importedCount, skipped })
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 })
