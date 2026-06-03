@@ -18,6 +18,8 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
    - **Naprawiony bug lawiny alertów:** opinie bez treści były fałszywie wykrywane jako "edytowane" przy każdym biegu crona (porównanie `null` vs `''`), co generowało spam alertów `EDITED_REVIEW` co 5 min. Teraz `normalizeComment` (trim + null→''), alert tylko przy realnej zmianie treści. Stare fałszywe alerty wyczyszczone SQL-em.
    - Tabela `alerts` ma kolumnę **`review_id`** → w UI alertów przycisk "Zobacz opinie →" prowadzi do `/reviews?review=ID` z podświetleniem i przewinięciem. Alert edycji pokazuje "Bylo... Jest...".
 
+10. **Wydajność list opinii** - ZROBIONE 2026-06-03. Strony `/reviews` i `/business/[id]` renderowaly wszystkie opinie naraz (Audi 1139) i zawieszaly Chrome. Teraz: sortowanie od najnowszej, **50 opinii/strone** + paginacja, filtr daty (szybkie zakresy Dzis/7d/30d/Wszystkie + wlasny zakres od-do). Domyslnie najnowsze 50.
+
 8. **System auto-odpowiedzi na opinie** - kod wdrożony na produkcję (main) 2026-06-03, ale w fazie **UŚPIONEJ**: auto-publikacja NIE działa, dopóki nie zostanie dodany cron `auto-respond` w cron-job.org.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
    - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
