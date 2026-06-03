@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, Send, X } from 'lucide-react'
+import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, Send, X, Sparkles } from 'lucide-react'
 import NavBar from '../components/NavBar'
 
 export default function ReviewsPage() {
@@ -13,6 +13,7 @@ export default function ReviewsPage() {
   const [replyText, setReplyText] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState(null)
+  const [suggesting, setSuggesting] = useState(false)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -62,6 +63,26 @@ export default function ReviewsPage() {
       setSendError('Błąd połączenia')
     }
     setSending(false)
+  }
+
+  const generateSuggestion = async (reviewId) => {
+    setSuggesting(true)
+    setSendError(null)
+    try {
+      const res = await fetch('/api/reviews/' + reviewId + '/suggest', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok) {
+        setReplyText(data.suggestion)
+        setReviews(reviews.map(r =>
+          r.id === reviewId ? { ...r, suggested_reply: data.suggestion } : r
+        ))
+      } else {
+        setSendError(data.error || 'Nie udalo sie wygenerowac propozycji')
+      }
+    } catch (e) {
+      setSendError('Błąd połączenia')
+    }
+    setSuggesting(false)
   }
 
   // Cutoff dla "bez odpowiedzi" - historyczne opinie sprzed maja 2026 ignorujemy
@@ -199,30 +220,40 @@ export default function ReviewsPage() {
                   {sendError && (
                     <p className="text-sm text-rose-600 mt-2">{sendError}</p>
                   )}
-                  <div className="flex items-center justify-end gap-2 mt-3">
+                  <div className="flex items-center justify-between gap-2 mt-3">
                     <button
-                      onClick={() => { setReplyingTo(null); setReplyText(''); setSendError(null) }}
-                      className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium"
+                      onClick={() => generateSuggestion(review.id)}
+                      disabled={suggesting}
+                      className="flex items-center gap-2 px-4 py-2 text-violet-600 hover:bg-violet-50 border border-violet-200 rounded-lg text-sm font-medium disabled:opacity-50"
                     >
-                      Anuluj
+                      <Sparkles size={16} />
+                      {suggesting ? 'Generuje...' : (replyText ? 'Generuj ponownie' : 'Zaproponuj AI')}
                     </button>
-                    <button
-                      onClick={() => sendReply(review.id)}
-                      disabled={sending || !replyText.trim()}
-                      className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
-                    >
-                      <Send size={16} />
-                      {sending ? 'Wysylanie...' : 'Wyslij'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setReplyingTo(null); setReplyText(''); setSendError(null) }}
+                        className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-sm font-medium"
+                      >
+                        Anuluj
+                      </button>
+                      <button
+                        onClick={() => sendReply(review.id)}
+                        disabled={sending || !replyText.trim()}
+                        className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
+                      >
+                        <Send size={16} />
+                        {sending ? 'Wysylanie...' : 'Wyslij'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <button 
-                  onClick={() => setReplyingTo(review.id)}
+                <button
+                  onClick={() => { setReplyingTo(review.id); setReplyText(review.suggested_reply || ''); setSendError(null) }}
                   className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-lg text-sm font-medium hover:opacity-90"
                 >
                   <Reply size={16} />
-                  Odpowiedz
+                  {review.suggested_reply ? 'Odpowiedz (propozycja gotowa)' : 'Odpowiedz'}
                 </button>
               )}
             </div>

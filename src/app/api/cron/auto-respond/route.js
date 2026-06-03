@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from '../../../../lib/email'
+import { generateReply } from '../../../../lib/ai'
 
 export const maxDuration = 300
 
@@ -155,7 +156,13 @@ export async function GET(request) {
     // (dostepna dla czlowieka w UI i jako material do auto-publikacji).
     let suggestion = review.suggested_reply
     if (!suggestion) {
-      suggestion = buildSuggestion(review, business)
+      try {
+        suggestion = await generateReply(review, business)
+      } catch (e) {
+        // Gdy AI zawiedzie, publikacja i tak musi miec tresc - uzywamy formulki.
+        console.error('Blad generowania AI, uzywam formulki:', e)
+        suggestion = buildSuggestion(review, business)
+      }
       await supabase
         .from('reviews').update({ suggested_reply: suggestion }).eq('id', review.id)
     }
