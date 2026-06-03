@@ -2,7 +2,7 @@ import nodemailer from 'nodemailer'
 
 // Wysylka maili przez firmowy serwer SMTP.
 // Dane konfiguracji w zmiennych srodowiskowych SMTP_*.
-export async function sendEmail(to, subject, html) {
+export async function sendEmail(to, subject, html, attachments = []) {
   const port = Number(process.env.SMTP_PORT) || 587
 
   const transporter = nodemailer.createTransport({
@@ -20,5 +20,6 @@ export async function sendEmail(to, subject, html) {
     to,
     subject,
     html,
+    ...(attachments.length > 0 ? { attachments } : {}),
   })
 }

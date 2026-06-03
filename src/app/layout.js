@@ -1,4 +1,5 @@
 import './globals.css'
+import FeedbackButton from './components/FeedbackButton'
 
 export const metadata = {
   title: 'GMB Manager',
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="pl">
-      <body>{children}</body>
+      <body>
+        {children}
+        <FeedbackButton />
+      </body>
     </html>
   )
 }
