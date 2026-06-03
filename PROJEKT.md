@@ -9,8 +9,10 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 1. **Weryfikacja produkcyjna OAuth (publish app)** - powód: apka jest w trybie Testing, przez co Google wygasza refresh_token co 7 dni i każdy user co tydzień traci dostęp. Scope `business.manage` jest **sensitive** (nie restricted), więc bez płatnego CASA, weryfikacja 3-5 dni roboczych. Wymaga własnej domeny + polityki prywatności + wideo demo.
 2. **Subdomena `wizytowki.plichta.com.pl`** podpinana do apki na Vercel. Rekordy CNAME (`06112434f9a48ae4.vercel-dns-017.com.`) + TXT (`google-site-verification=...`) **zlecone do IT** (czekamy). Domena odseparowana od hostingu, przeżyje migrację na VPS.
 3. **Strona `/privacy`** (`src/app/privacy/page.js`) wdrożona na produkcję (main) - wymóg weryfikacji Google. Dane Plichta + IOD inspektor@plichta.com.pl.
-4. **Reset hasła** - kod gotowy na branchu **`feature/password-reset`** (NIE na main, NIE na produkcji). Czeka na trzy rzeczy: (a) SQL dodający kolumny `reset_token` + `reset_token_expires` do `users`, (b) firmowa skrzynka SMTP **zlecona do IT**, (c) zmienne `SMTP_HOST/PORT/USER/PASS/FROM` w env. Po tym: merge do main + deploy.
-5. **Maile przez firmowy SMTP zamiast Resend** - decyzja 2026-06-03. Powód: brak vendor lock-in + przeżyje migrację na VPS. Użyty `nodemailer` (helper `src/lib/email.js` na branchu resetu). Resend nigdy nie był wdrożony.
+4. **Reset hasła** - ZROBIONE i wdrożone na produkcję 2026-06-03. Strony `/forgot-password` + `/reset-password`, endpointy, kolumny `reset_token` + `reset_token_expires` w `users`, mail przez SMTP. Przetestowane end-to-end (mail dochodzi, zmiana hasła działa). Token ważny 1h, jednorazowy.
+5. **Maile przez firmowy SMTP zamiast Resend** - DZIAŁA od 2026-06-03. Firmowa skrzynka SMTP (dane w zmiennych `SMTP_HOST/PORT/USER/PASS/FROM` w Vercel env). Helper `src/lib/email.js` (`nodemailer`). Powód wyboru: brak vendor lock-in + przeżyje migrację na VPS. Resend nigdy nie był wdrożony.
+6. **Subdomena CNAME działa**, brakuje rekordu **TXT `google-site-verification`** (IT pominęło, dodanie zlecone ponownie). Po dodaniu: Search Console "Verify" → OAuth consent screen → wideo demo → submit weryfikacji produkcyjnej.
+7. **TODO po SMTP:** podłączyć działające alerty mailowe o opiniach - cron `sync-reviews` ma własną funkcję `sendEmail` przez Resend (martwą), wystarczy przełączyć ją na helper `src/lib/email.js`.
 
 ## Czym jest projekt
 
@@ -219,7 +221,7 @@ Sync uruchamiany automatycznie przez zewnętrzny scheduler **cron-job.org** (wyw
 ## Znane problemy (security i tech debt)
 
 1. **SHA256 bez salt** w `hashPassword()` - podatne na rainbow table attacks. Powinno być bcrypt (`bcryptjs`)
-2. **Brak forgot password** - reset hasła wymaga ręcznej podmiany hash w bazie
+2. ~~**Brak forgot password**~~ - ROZWIĄZANE 2026-06-03 (self-service reset przez email, patrz "Stan prac w toku" pkt 4)
 3. **RLS świadomie WYŁĄCZONY** (2026-05-26) - próby włączenia padały bo SDK `@supabase/supabase-js: 2.39.3` autoryzuje klienta jako **anon** mimo że w env jest service_role JWT. Policy `TO service_role` nie jest triggered. Apka jest **w praktyce bezpieczna** (cały backend używa service_role key, frontend nie łączy się bezpośrednio z Supabase, anon_key nie jest w kodzie), ale Supabase krzyczy w dashboardzie. **Do naprawy przy migracji na VPS** (od zera, ze świeżą konfiguracją + nowsze SDK)
 4. **Service role key w nazwie `SUPABASE_SERVICE_KEY`** zamiast standardowego `SUPABASE_SERVICE_ROLE_KEY` - inconsistency z global CLAUDE.md
 5. **Duplikat `alert-settings` i `alerts/settings`** - dwie identyczne strony (refactor jako TODO, nie pilne)
