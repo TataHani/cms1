@@ -15,7 +15,7 @@ export async function POST(request, { params }) {
 
   const { data: review } = await supabase
     .from('reviews')
-    .select('id, star_rating, comment, business_id')
+    .select('id, star_rating, comment, business_id, reviewer_name')
     .eq('id', params.id)
     .single()
 
