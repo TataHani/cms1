@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, Send, X, Sparkles } from 'lucide-react'
 import NavBar from '../components/NavBar'
+import { parseReviewComment } from '../../lib/reviewText'
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([])
@@ -268,7 +269,15 @@ export default function ReviewsPage() {
                 </span>
               </div>
 
-              <p className="text-slate-700 mb-4">{review.comment}</p>
+              {(() => {
+                const { original, translation } = parseReviewComment(review.comment)
+                return (
+                  <>
+                    <p className="text-slate-700 mb-1">{original}</p>
+                    {translation && <p className="text-slate-400 text-xs mb-4">Tłumaczenie Google: {translation}</p>}
+                  </>
+                )
+              })()}
 
               {review.has_reply ? (
                 <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-emerald-500">

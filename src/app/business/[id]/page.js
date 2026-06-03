@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Building2, Star, MessageSquare, Phone, Globe, MapPin, ArrowLeft, Reply, CheckCircle, Send, Sparkles } from 'lucide-react'
 import NavBar from '../../components/NavBar'
+import { parseReviewComment } from '../../../lib/reviewText'
 
 export default function BusinessDetailPage() {
   const params = useParams()
@@ -341,7 +342,15 @@ export default function BusinessDetailPage() {
                 </span>
               </div>
 
-              <p className="text-slate-700 mb-4">{review.comment}</p>
+              {(() => {
+                const { original, translation } = parseReviewComment(review.comment)
+                return (
+                  <>
+                    <p className="text-slate-700 mb-1">{original}</p>
+                    {translation && <p className="text-slate-400 text-xs mb-4">Tłumaczenie Google: {translation}</p>}
+                  </>
+                )
+              })()}
 
               {review.has_reply ? (
                 <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-emerald-500">
