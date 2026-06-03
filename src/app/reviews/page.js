@@ -15,6 +15,12 @@ export default function ReviewsPage() {
   const [sendError, setSendError] = useState(null)
   const [suggesting, setSuggesting] = useState(false)
   const [highlightId, setHighlightId] = useState(null)
+  const [quickRange, setQuickRange] = useState('all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [page, setPage] = useState(0)
+
+  const PAGE_SIZE = 50
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -23,6 +29,11 @@ export default function ReviewsPage() {
     if (rid) setHighlightId(rid)
     loadData()
   }, [])
+
+  // Zmiana filtra wraca na pierwsza strone
+  useEffect(() => {
+    setPage(0)
+  }, [selectedBusiness, onlyUnanswered, quickRange, dateFrom, dateTo])
 
   // Po wejsciu z alertu (?review=ID) przewin do wskazanej opinii
   useEffect(() => {
@@ -100,9 +111,31 @@ export default function ReviewsPage() {
   const UNANSWERED_CUTOFF = new Date('2026-05-01')
   const isUnansweredRelevant = (r) => !r.has_reply && new Date(r.create_time) >= UNANSWERED_CUTOFF
 
+  const dateInRange = (r) => {
+    if (quickRange === 'all') return true
+    const t = new Date(r.create_time).getTime()
+    const now = new Date()
+    if (quickRange === 'today') {
+      return t >= new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    }
+    if (quickRange === '7d') return t >= now.getTime() - 7 * 24 * 60 * 60 * 1000
+    if (quickRange === '30d') return t >= now.getTime() - 30 * 24 * 60 * 60 * 1000
+    if (quickRange === 'custom') {
+      const from = dateFrom ? new Date(dateFrom).getTime() : -Infinity
+      const to = dateTo ? new Date(dateTo).getTime() + 24 * 60 * 60 * 1000 : Infinity
+      return t >= from && t <= to
+    }
+    return true
+  }
+
   const filteredReviews = reviews
     .filter(r => selectedBusiness === 'all' || r.business_id === selectedBusiness)
     .filter(r => !onlyUnanswered || isUnansweredRelevant(r))
+    .filter(dateInRange)
+    .sort((a, b) => new Date(b.create_time) - new Date(a.create_time))
+
+  const totalPages = Math.max(1, Math.ceil(filteredReviews.length / PAGE_SIZE))
+  const pagedReviews = filteredReviews.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
 
   const getBusinessName = (businessId) => {
     const business = businesses.find(b => b.id === businessId)
@@ -167,8 +200,41 @@ export default function ReviewsPage() {
           </button>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          {[
+            { k: 'all', label: 'Wszystkie' },
+            { k: 'today', label: 'Dzis' },
+            { k: '7d', label: '7 dni' },
+            { k: '30d', label: '30 dni' },
+          ].map(opt => (
+            <button
+              key={opt.k}
+              onClick={() => setQuickRange(opt.k)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border ${quickRange === opt.k ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-1 ml-2">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setQuickRange('custom') }}
+              className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
+            />
+            <span className="text-slate-400 text-sm">-</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setQuickRange('custom') }}
+              className="px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
+            />
+          </div>
+          <span className="text-sm text-slate-400 ml-auto">{filteredReviews.length} opinii</span>
+        </div>
+
         <div className="space-y-4">
-          {filteredReviews.map((review) => (
+          {pagedReviews.map((review) => (
             <div key={review.id} id={'review-' + review.id} className={`bg-white rounded-xl border p-6 ${highlightId === review.id ? 'border-emerald-400 ring-2 ring-emerald-300' : 'border-slate-200'}`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start gap-4">
@@ -270,6 +336,32 @@ export default function ReviewsPage() {
             </div>
           ))}
         </div>
+
+        {filteredReviews.length === 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500">
+            Brak opinii dla wybranych filtrow.
+          </div>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 mt-6">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium disabled:opacity-40 hover:bg-slate-50"
+            >
+              Poprzednia
+            </button>
+            <span className="text-sm text-slate-600">Strona {page + 1} z {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page >= totalPages - 1}
+              className="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium disabled:opacity-40 hover:bg-slate-50"
+            >
+              Nastepna
+            </button>
+          </div>
+        )}
       </main>
     </div>
   )
