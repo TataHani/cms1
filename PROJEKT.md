@@ -23,7 +23,8 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 8. **System auto-odpowiedzi na opinie** - kod wdrożony na produkcję (main) 2026-06-03, ale w fazie **UŚPIONEJ**: auto-publikacja NIE działa, dopóki nie zostanie dodany cron `auto-respond` w cron-job.org.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
    - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
-   - **AI:** Claude **Haiku 4.5** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki.
+   - **AI:** Claude **Haiku 4.5** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki. Klucz `ANTHROPIC_API_KEY` dodany do Vercel 2026-06-03, działa.
+   - **Język opinii:** Google sklejają oryginał + tłumaczenie w jednym polu `comment`. Parser `src/lib/reviewText.js` (`parseReviewComment`) rozdziela je (obsługuje format z `(Translated by Google)` i z `(Original)`). AI dostaje sam oryginał i odpowiada w jego języku, z zakazem znaku „–". UI pokazuje oryginał + tłumaczenie szarym drukiem pod spodem.
    - **Kolumny w `reviews`:** `alert_sent_at`, `auto_replied_at`, `is_auto_reply`, `suggested_reply` (dodane).
    - **OTWARTE TODO przed włączeniem auto-publikacji:**
      - (a) **Dodać `ANTHROPIC_API_KEY`** do Vercel env (Marcin, jeszcze NIE zrobione) - bez tego "Zaproponuj AI" i auto-AI nie działają.
