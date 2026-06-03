@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { sendEmail } from '../../../../lib/email'
 
 export const maxDuration = 800
 
@@ -6,28 +7,6 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 )
-
-async function sendEmail(to, subject, html) {
-  if (!process.env.RESEND_API_KEY) return
-
-  try {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + process.env.RESEND_API_KEY,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'GMB Manager <noreply@resend.dev>',
-        to: to,
-        subject: subject,
-        html: html
-      })
-    })
-  } catch (e) {
-    console.error('Email error:', e)
-  }
-}
 
 async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
   let allReviews = []
@@ -207,32 +186,41 @@ export async function GET(request) {
           if (isNew) {
             totalNewReviews++
 
-            await supabase.from('alerts').insert({
-              user_id: connection.user_id,
-              business_id: business.id,
-              alert_type: 'NEW_REVIEW',
-              title: 'Nowa opinia ' + starRating + '★',
-              message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
-              is_read: false
-            })
+            // Powiadamiamy tylko o negatywnych opiniach (1-2 gwiazdki).
+            // Pozytywne nie generuja szumu - zajmie sie nimi auto-odpowiedz.
+            const isNegative = starRating === 1 || starRating === 2
 
-            if (alertSettings && alertSettings.length > 0) {
-              for (const setting of alertSettings) {
-                const matchesBusiness = !setting.business_id || setting.business_id === business.id
-                const matchesStars = starRating >= setting.min_stars && starRating <= setting.max_stars
+            if (isNegative) {
+              await supabase.from('alerts').insert({
+                user_id: connection.user_id,
+                business_id: business.id,
+                alert_type: 'NEGATIVE_REVIEW',
+                title: 'Negatywna opinia ' + starRating + '★',
+                message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
+                is_read: false
+              })
 
-                if (matchesBusiness && matchesStars && setting.email_address) {
-                  await sendEmail(
-                    setting.email_address,
-                    'Nowa opinia ' + starRating + '★ - ' + business.title,
-                    `
-                      <h2>Nowa opinia dla ${business.title}</h2>
-                      <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
-                      <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
-                      <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
-                      <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
-                    `
-                  )
+              if (alertSettings && alertSettings.length > 0) {
+                for (const setting of alertSettings) {
+                  const matchesBusiness = !setting.business_id || setting.business_id === business.id
+
+                  if (matchesBusiness && setting.email_address) {
+                    try {
+                      await sendEmail(
+                        setting.email_address,
+                        'Negatywna opinia ' + starRating + '★ - ' + business.title,
+                        `
+                          <h2>Negatywna opinia dla ${business.title}</h2>
+                          <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
+                          <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
+                          <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
+                          <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
+                        `
+                      )
+                    } catch (e) {
+                      console.error('Blad wysylki maila alertu:', e)
+                    }
+                  }
                 }
               }
             }
