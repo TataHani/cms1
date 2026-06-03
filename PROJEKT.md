@@ -1,6 +1,16 @@
 # PROJEKT.md - CMS1 (GMB Manager)
 
-Status na dzień: **2026-05-26**
+Status na dzień: **2026-05-26** (sekcja "Stan prac w toku" zaktualizowana 2026-06-03)
+
+## Stan prac w toku (2026-06-03)
+
+Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działających maili.
+
+1. **Weryfikacja produkcyjna OAuth (publish app)** - powód: apka jest w trybie Testing, przez co Google wygasza refresh_token co 7 dni i każdy user co tydzień traci dostęp. Scope `business.manage` jest **sensitive** (nie restricted), więc bez płatnego CASA, weryfikacja 3-5 dni roboczych. Wymaga własnej domeny + polityki prywatności + wideo demo.
+2. **Subdomena `wizytowki.plichta.com.pl`** podpinana do apki na Vercel. Rekordy CNAME (`06112434f9a48ae4.vercel-dns-017.com.`) + TXT (`google-site-verification=...`) **zlecone do IT** (czekamy). Domena odseparowana od hostingu, przeżyje migrację na VPS.
+3. **Strona `/privacy`** (`src/app/privacy/page.js`) wdrożona na produkcję (main) - wymóg weryfikacji Google. Dane Plichta + IOD inspektor@plichta.com.pl.
+4. **Reset hasła** - kod gotowy na branchu **`feature/password-reset`** (NIE na main, NIE na produkcji). Czeka na trzy rzeczy: (a) SQL dodający kolumny `reset_token` + `reset_token_expires` do `users`, (b) firmowa skrzynka SMTP **zlecona do IT**, (c) zmienne `SMTP_HOST/PORT/USER/PASS/FROM` w env. Po tym: merge do main + deploy.
+5. **Maile przez firmowy SMTP zamiast Resend** - decyzja 2026-06-03. Powód: brak vendor lock-in + przeżyje migrację na VPS. Użyty `nodemailer` (helper `src/lib/email.js` na branchu resetu). Resend nigdy nie był wdrożony.
 
 ## Czym jest projekt
 
@@ -220,6 +230,7 @@ Sync uruchamiany automatycznie przez zewnętrzny scheduler **cron-job.org** (wyw
 10. **Brak `vercel.json`** z konfiguracją crona - cron wywoływany z zewnętrznego scheduler cron-job.org (działa)
 11. **Tabela `posts` z kodu nie istnieje w bazie** - przy próbie tworzenia posta apka padnie. Albo dodać migrację, albo usunąć endpoint
 12. **SDK Supabase 2.39.3 (styczeń 2024) jest stary** - nie obsługuje nowych API kluczy (`sb_secret_`/`sb_publishable_`), powoduje problem z RLS. Upgrade do 2.50+ jako część migracji
+13b. **Maile w ogóle nie wychodzą** (potwierdzone 2026-06-03) - Resend nigdy nie został wdrożony (brak klucza API). Funkcja `sendEmail` w cronie po cichu pomija wysyłkę, gdy brak konfiguracji. Skutek: **alerty email o nowych opiniach NIE działają**, mimo że kod istnieje (sekcja "Co działa" była w tym punkcie nieaktualna). Rozwiązanie: firmowy SMTP (patrz "Stan prac w toku" pkt 5).
 13. **OAuth consent screen w trybie Testing** (potwierdzone 2026-06-02) - reconnect Google daje 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` przy `ListAccounts` gdy użytkownik NIE jest na liście Test users. To NIE błąd klikania consent ani apki - Google odrzuca restricted scope `business.manage` dla nie-test-userów. **Fix:** Google Cloud Console -> APIs & Services -> OAuth consent screen -> Test users -> dodać email Google użytkownika -> użytkownik robi reconnect (settings -> Odłącz/Połącz Google). **Uwaga:** w trybie Testing Google unieważnia refresh_token po **7 dniach**, stąd cykliczne zamrażanie wizytówek (np. VW koleżanki). Trwałe rozwiązanie: opublikować apkę (Production) - wymaga weryfikacji Google dla restricted scope.
 
 ## Plan migracji na VPS (do końca miesiąca Vercel Pro, ~2026-06-26)
