@@ -220,6 +220,7 @@ Sync uruchamiany automatycznie przez zewnętrzny scheduler **cron-job.org** (wyw
 10. **Brak `vercel.json`** z konfiguracją crona - cron wywoływany z zewnętrznego scheduler cron-job.org (działa)
 11. **Tabela `posts` z kodu nie istnieje w bazie** - przy próbie tworzenia posta apka padnie. Albo dodać migrację, albo usunąć endpoint
 12. **SDK Supabase 2.39.3 (styczeń 2024) jest stary** - nie obsługuje nowych API kluczy (`sb_secret_`/`sb_publishable_`), powoduje problem z RLS. Upgrade do 2.50+ jako część migracji
+13. **OAuth consent screen w trybie Testing** (potwierdzone 2026-06-02) - reconnect Google daje 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` przy `ListAccounts` gdy użytkownik NIE jest na liście Test users. To NIE błąd klikania consent ani apki - Google odrzuca restricted scope `business.manage` dla nie-test-userów. **Fix:** Google Cloud Console -> APIs & Services -> OAuth consent screen -> Test users -> dodać email Google użytkownika -> użytkownik robi reconnect (settings -> Odłącz/Połącz Google). **Uwaga:** w trybie Testing Google unieważnia refresh_token po **7 dniach**, stąd cykliczne zamrażanie wizytówek (np. VW koleżanki). Trwałe rozwiązanie: opublikować apkę (Production) - wymaga weryfikacji Google dla restricted scope.
 
 ## Plan migracji na VPS (do końca miesiąca Vercel Pro, ~2026-06-26)
 
