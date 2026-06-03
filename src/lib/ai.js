@@ -1,7 +1,7 @@
 // Generowanie odpowiedzi na opinie Google przez Claude API.
 import { parseReviewComment } from './reviewText'
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'claude-sonnet-4-6'
 
 function buildPrompt(review, business) {
   // Google sklejaja oryginal z tlumaczeniem - bierzemy sam oryginal,
@@ -12,20 +12,20 @@ function buildPrompt(review, business) {
   const contact = business.phone ? ` Numer kontaktowy firmy: ${business.phone}.` : ''
 
   if (isNegative) {
-    return `Napisz krotka (2-3 zdania) odpowiedz na negatywna opinie (${review.star_rating}/5) wystawiona firmie "${business.title}".
-Oryginalna tresc opinii: "${original || '(brak tresci, sama ocena)'}"
-Odpowiedz w tym samym jezyku, w ktorym napisana jest opinia.
-Zasady: przepros za nieprzyjemne doswiadczenie, okaz empatie, zaproponuj kontakt w celu wyjasnienia sprawy. NIE przyznawaj sie do konkretnych win, NIE wdawaj sie w polemike, nie obiecuj rekompensaty.${contact} Ton uprzejmy i profesjonalny. Zakoncz podpisem "Zespol ${business.title}".`
+    return `Napisz krótką (2-3 zdania) odpowiedź na negatywną opinię (${review.star_rating}/5) wystawioną firmie "${business.title}".
+Oryginalna treść opinii: "${original || '(brak treści, sama ocena)'}"
+Odpowiedz w tym samym języku, w którym napisana jest opinia.
+Zasady: przeproś za nieprzyjemne doświadczenie, okaż empatię, zaproponuj kontakt w celu wyjaśnienia sprawy. Nie przyznawaj się do konkretnych win, nie wdawaj się w polemikę, nie obiecuj rekompensaty.${contact} Zwracaj się do klienta z szacunkiem (forma grzecznościowa). Ton uprzejmy i profesjonalny. Zakończ podpisem "Zespół ${business.title}".`
   }
 
   if (hasText) {
-    return `Napisz krotkie (1-2 zdania) cieple podziekowanie za pozytywna opinie (${review.star_rating}/5) wystawiona firmie "${business.title}".
-Oryginalna tresc opinii: "${original}"
-Odpowiedz w tym samym jezyku, w ktorym napisana jest opinia.
-Ton serdeczny i profesjonalny, bez przesady. Zakoncz podpisem "Zespol ${business.title}".`
+    return `Napisz krótkie (1-2 zdania) ciepłe podziękowanie za pozytywną opinię (${review.star_rating}/5) wystawioną firmie "${business.title}".
+Oryginalna treść opinii: "${original}"
+Odpowiedz w tym samym języku, w którym napisana jest opinia.
+Zwracaj się do klienta z szacunkiem (forma grzecznościowa). Ton serdeczny i profesjonalny, bez przesady. Zakończ podpisem "Zespół ${business.title}".`
   }
 
-  return `Napisz bardzo krotkie (1 zdanie) uprzejme podziekowanie za ocene ${review.star_rating}/5 wystawiona firmie "${business.title}" (klient nie dodal tresci). Zakoncz podpisem "Zespol ${business.title}".`
+  return `Napisz bardzo krótkie (1 zdanie) uprzejme podziękowanie za ocenę ${review.star_rating}/5 wystawioną firmie "${business.title}" (klient nie dodał treści). Zwracaj się z szacunkiem (forma grzecznościowa). Zakończ podpisem "Zespół ${business.title}".`
 }
 
 export async function generateReply(review, business) {
@@ -39,7 +39,7 @@ export async function generateReply(review, business) {
     body: JSON.stringify({
       model: MODEL,
       max_tokens: 400,
-      system: 'Jestes asystentem odpowiadajacym na opinie Google w imieniu firmy. Piszesz naturalnie i konkretnie, w tym samym jezyku, w ktorym napisana jest opinia klienta. Nie uzywaj znaku myslnika "–" ani "—"; zamiast nich uzywaj przecinka lub kropki (zwykly lacznik "-" jest dozwolony). Zwracasz sam tekst odpowiedzi, bez komentarzy od siebie i bez cudzyslowow.',
+      system: 'Jesteś asystentem odpowiadającym na opinie Google w imieniu firmy. Piszesz naturalnie, poprawną polszczyzną z właściwą odmianą wyrazów i interpunkcją (gdy opinia jest po polsku), w tym samym języku, w którym napisana jest opinia klienta. Zachowuj pełną poprawność gramatyczną i fleksyjną. Nie używaj znaku myślnika "–" ani "—"; zamiast nich używaj przecinka lub kropki (zwykły łącznik "-" jest dozwolony). Zwracasz sam tekst odpowiedzi, bez komentarzy od siebie i bez cudzysłowów.',
       messages: [{ role: 'user', content: buildPrompt(review, business) }],
     }),
   })
