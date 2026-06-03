@@ -12,7 +12,17 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 4. **Reset hasła** - ZROBIONE i wdrożone na produkcję 2026-06-03. Strony `/forgot-password` + `/reset-password`, endpointy, kolumny `reset_token` + `reset_token_expires` w `users`, mail przez SMTP. Przetestowane end-to-end (mail dochodzi, zmiana hasła działa). Token ważny 1h, jednorazowy.
 5. **Maile przez firmowy SMTP zamiast Resend** - DZIAŁA od 2026-06-03. Firmowa skrzynka SMTP (dane w zmiennych `SMTP_HOST/PORT/USER/PASS/FROM` w Vercel env). Helper `src/lib/email.js` (`nodemailer`). Powód wyboru: brak vendor lock-in + przeżyje migrację na VPS. Resend nigdy nie był wdrożony.
 6. **Subdomena CNAME działa**, brakuje rekordu **TXT `google-site-verification`** (IT pominęło, dodanie zlecone ponownie). Po dodaniu: Search Console "Verify" → OAuth consent screen → wideo demo → submit weryfikacji produkcyjnej.
-7. **TODO po SMTP:** podłączyć działające alerty mailowe o opiniach - cron `sync-reviews` ma własną funkcję `sendEmail` przez Resend (martwą), wystarczy przełączyć ją na helper `src/lib/email.js`.
+7. **Alerty mailowe o opiniach** - ZROBIONE 2026-06-03. Cron `sync-reviews` przełączony z martwego Resend na helper `src/lib/email.js` (SMTP). Powiadomienia (in-app + mail) tylko dla opinii **1-2★** (negatywne), pozytywne nie generują szumu.
+8. **System auto-odpowiedzi na opinie** - kod wdrożony na produkcję (main) 2026-06-03, ale w fazie **UŚPIONEJ**: auto-publikacja NIE działa, dopóki nie zostanie dodany cron `auto-respond` w cron-job.org.
+   - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
+   - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
+   - **AI:** Claude **Haiku 4.5** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki.
+   - **Kolumny w `reviews`:** `alert_sent_at`, `auto_replied_at`, `is_auto_reply`, `suggested_reply` (dodane).
+   - **OTWARTE TODO przed włączeniem auto-publikacji:**
+     - (a) **Dodać `ANTHROPIC_API_KEY`** do Vercel env (Marcin, jeszcze NIE zrobione) - bez tego "Zaproponuj AI" i auto-AI nie działają.
+     - (b) Przetestować jakość propozycji AI w UI (przycisk "Zaproponuj AI").
+     - (c) Zaktualizować stałą `CUTOFF` w `src/app/api/cron/auto-respond/route.js` na realny moment startu (inaczej pierwszy bieg crona zaleje stare opinie auto-odpowiedziami).
+     - (d) Dodać zadanie crona `/api/cron/auto-respond` co 15 min z headerem `x-cron-secret` w cron-job.org → DOPIERO to uruchamia auto-publikację.
 
 ## Czym jest projekt
 
