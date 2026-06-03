@@ -13,6 +13,11 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 5. **Maile przez firmowy SMTP zamiast Resend** - DZIAŁA od 2026-06-03. Firmowa skrzynka SMTP (dane w zmiennych `SMTP_HOST/PORT/USER/PASS/FROM` w Vercel env). Helper `src/lib/email.js` (`nodemailer`). Powód wyboru: brak vendor lock-in + przeżyje migrację na VPS. Resend nigdy nie był wdrożony.
 6. **Subdomena CNAME działa**, brakuje rekordu **TXT `google-site-verification`** (IT pominęło, dodanie zlecone ponownie). Po dodaniu: Search Console "Verify" → OAuth consent screen → wideo demo → submit weryfikacji produkcyjnej.
 7. **Alerty mailowe o opiniach** - ZROBIONE 2026-06-03. Cron `sync-reviews` przełączony z martwego Resend na helper `src/lib/email.js` (SMTP). Powiadomienia (in-app + mail) tylko dla opinii **1-2★** (negatywne), pozytywne nie generują szumu.
+9. **UX alertów i synchronizacji** - ZROBIONE i wdrożone na produkcję 2026-06-03:
+   - Dashboard "Synchronizuj" działa w tle (fetch) z komunikatem i spinnerem, zamiast wyrzucać usera na surowy JSON endpointu.
+   - **Naprawiony bug lawiny alertów:** opinie bez treści były fałszywie wykrywane jako "edytowane" przy każdym biegu crona (porównanie `null` vs `''`), co generowało spam alertów `EDITED_REVIEW` co 5 min. Teraz `normalizeComment` (trim + null→''), alert tylko przy realnej zmianie treści. Stare fałszywe alerty wyczyszczone SQL-em.
+   - Tabela `alerts` ma kolumnę **`review_id`** → w UI alertów przycisk "Zobacz opinie →" prowadzi do `/reviews?review=ID` z podświetleniem i przewinięciem. Alert edycji pokazuje "Bylo... Jest...".
+
 8. **System auto-odpowiedzi na opinie** - kod wdrożony na produkcję (main) 2026-06-03, ale w fazie **UŚPIONEJ**: auto-publikacja NIE działa, dopóki nie zostanie dodany cron `auto-respond` w cron-job.org.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
    - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
