@@ -8,6 +8,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+// Porownanie tresci odporne na null/'' i biale znaki - inaczej opinie
+// bez tekstu byly uznawane za "edytowane" przy kazdym biegu crona.
+const normalizeComment = (c) => (c || '').trim()
+
 async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
   let allReviews = []
   let pageToken = null
@@ -121,7 +125,7 @@ export async function GET(request) {
         // Dzięki temu wiemy co jest "naprawdę nowe" vs "import historyczny"
         const { data: existingReviews } = await supabase
           .from('reviews')
-          .select('google_review_id, comment')
+          .select('id, google_review_id, comment')
           .eq('business_id', business.id)
           .limit(50000)
 
@@ -161,12 +165,12 @@ export async function GET(request) {
 
           // Opinia jest nowa tylko jeśli: nie ma jej w DB ORAZ została wystawiona niedawno
           const isNew = !existing && !!reviewDate && reviewDate > freshnessThreshold
-          const isEdited = !!existing && existing.comment !== (review.comment || '')
+          const isEdited = !!existing && normalizeComment(existing.comment) !== normalizeComment(review.comment)
 
           const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
           const starRating = ratingMap[review.starRating] || 0
 
-          await supabase.from('reviews').upsert({
+          const { data: savedReview } = await supabase.from('reviews').upsert({
             business_id: business.id,
             google_review_id: review.reviewId,
             reviewer_name: review.reviewer?.displayName || 'Anonim',
@@ -181,7 +185,9 @@ export async function GET(request) {
             update_time: review.updateTime
           }, {
             onConflict: 'google_review_id'
-          })
+          }).select('id').single()
+
+          const reviewDbId = savedReview?.id || existing?.id || null
 
           if (isNew) {
             totalNewReviews++
@@ -194,6 +200,7 @@ export async function GET(request) {
               await supabase.from('alerts').insert({
                 user_id: connection.user_id,
                 business_id: business.id,
+                review_id: reviewDbId,
                 alert_type: 'NEGATIVE_REVIEW',
                 title: 'Negatywna opinia ' + starRating + '★',
                 message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
@@ -227,12 +234,18 @@ export async function GET(request) {
           }
 
           if (isEdited) {
+            const oldText = existing.comment?.trim() || '(brak tresci)'
+            const newText = review.comment?.trim() || '(brak tresci)'
+            const shorten = (t) => t.length > 140 ? t.slice(0, 140) + '...' : t
+
             await supabase.from('alerts').insert({
               user_id: connection.user_id,
               business_id: business.id,
+              review_id: reviewDbId,
               alert_type: 'EDITED_REVIEW',
-              title: 'Edytowana opinia',
-              message: (review.reviewer?.displayName || 'Ktos') + ' zmienil opinie dla ' + business.title,
+              title: 'Zmieniona opinia ' + starRating + '★',
+              message: (review.reviewer?.displayName || 'Ktos') + ' zmienil opinie dla ' + business.title +
+                '. Bylo: "' + shorten(oldText) + '" Jest: "' + shorten(newText) + '"',
               is_read: false
             })
           }

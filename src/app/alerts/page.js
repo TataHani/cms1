@@ -119,6 +119,14 @@ export default function AlertsPage() {
                     <div>
                       <h4 className="font-medium text-slate-900">{alert.title}</h4>
                       <p className="text-sm text-slate-600">{alert.message}</p>
+                      {alert.review_id && (
+                        <a
+                          href={'/reviews?review=' + alert.review_id}
+                          className="inline-block text-xs font-medium text-emerald-600 hover:text-emerald-700 mt-2"
+                        >
+                          Zobacz opinie →
+                        </a>
+                      )}
                       <p className="text-xs text-slate-400 mt-1">
                         {new Date(alert.created_at).toLocaleString('pl-PL')}
                       </p>

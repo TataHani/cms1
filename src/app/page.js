@@ -9,6 +9,8 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false)
   const [hasGoogleConnection, setHasGoogleConnection] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState(null)
 
   useEffect(() => {
     fetch('/api/auth/session')
@@ -35,6 +37,24 @@ export default function Home() {
       console.error(e)
     }
     setLoading(false)
+  }
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setSyncMsg(null)
+    try {
+      const res = await fetch('/api/business/connect')
+      const data = await res.json()
+      if (res.ok) {
+        setSyncMsg({ type: 'ok', text: 'Zsynchronizowano wizytowki z Google.' })
+        await loadBusinesses()
+      } else {
+        setSyncMsg({ type: 'err', text: data.error || 'Nie udalo sie zsynchronizowac wizytowek.' })
+      }
+    } catch (e) {
+      setSyncMsg({ type: 'err', text: 'Blad polaczenia. Sprobuj ponownie.' })
+    }
+    setSyncing(false)
   }
 
   if (loading) {
@@ -80,6 +100,12 @@ if (!user) {
     <NavBar activePage="dashboard" />
       <main className="max-w-7xl mx-auto p-6">
         <h2 className="text-2xl font-bold text-slate-900 mb-6">Dashboard</h2>
+
+        {syncMsg && (
+          <div className={`mb-6 p-3 rounded-lg text-sm border ${syncMsg.type === 'ok' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+            {syncMsg.text}
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="bg-white rounded-xl p-6 border border-slate-200">
             <div className="flex items-center gap-4">
@@ -119,10 +145,10 @@ if (!user) {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-slate-900">Twoje wizytowki</h3>
           {hasGoogleConnection && (
-            <a href="/api/business/connect" className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 px-4 rounded-lg text-sm font-medium hover:opacity-90">
-              <RefreshCw size={16} />
-              Synchronizuj
-            </a>
+            <button onClick={handleSync} disabled={syncing} className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-2 px-4 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
+              <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+              {syncing ? 'Synchronizuje...' : 'Synchronizuj'}
+            </button>
           )}
         </div>
 
@@ -133,7 +159,7 @@ if (!user) {
               <>
                 <h3 className="text-lg font-medium text-slate-900 mb-2">Brak polaczonych wizytowek</h3>
                 <p className="text-slate-500 mb-6">Kliknij "Synchronizuj" aby pobrac wizytowki z Google Business Profile.</p>
-                <a href="/api/business/connect" className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity">Pobierz wizytowki</a>
+                <button onClick={handleSync} disabled={syncing} className="inline-flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white py-3 px-6 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50">{syncing ? 'Synchronizuje...' : 'Pobierz wizytowki'}</button>
               </>
             ) : (
               <>

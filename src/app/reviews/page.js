@@ -14,12 +14,23 @@ export default function ReviewsPage() {
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState(null)
   const [suggesting, setSuggesting] = useState(false)
+  const [highlightId, setHighlightId] = useState(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('unanswered') === '1') setOnlyUnanswered(true)
+    const rid = params.get('review')
+    if (rid) setHighlightId(rid)
     loadData()
   }, [])
+
+  // Po wejsciu z alertu (?review=ID) przewin do wskazanej opinii
+  useEffect(() => {
+    if (highlightId && reviews.length > 0) {
+      const el = document.getElementById('review-' + highlightId)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, [highlightId, reviews])
 
   const loadData = async () => {
     try {
@@ -158,7 +169,7 @@ export default function ReviewsPage() {
 
         <div className="space-y-4">
           {filteredReviews.map((review) => (
-            <div key={review.id} className="bg-white rounded-xl border border-slate-200 p-6">
+            <div key={review.id} id={'review-' + review.id} className={`bg-white rounded-xl border p-6 ${highlightId === review.id ? 'border-emerald-400 ring-2 ring-emerald-300' : 'border-slate-200'}`}>
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-start gap-4">
                   <div className="w-12 h-12 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 font-semibold">
