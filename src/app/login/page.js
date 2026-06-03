@@ -99,7 +99,11 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-slate-500">
+        <p className="mt-4 text-center">
+          <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-700">Nie pamietasz hasla?</a>
+        </p>
+
+        <p className="mt-4 text-center text-slate-500">
           Nie masz konta? <a href="/register" className="text-emerald-600 hover:text-emerald-700 font-medium">Zarejestruj sie</a>
         </p>
       </div>
