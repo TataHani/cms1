@@ -2,12 +2,29 @@
 
 Status na dzień: **2026-05-26** (sekcja "Stan prac w toku" zaktualizowana 2026-06-03)
 
+## KRYTYCZNE - apka zablokowana egressem (2026-06-10)
+
+**Stan:** Supabase zwraca 402 (Egress Exceeded). Przekroczony limit 5 GB transferu na darmowym planie. Limit liczony per ORGANIZACJA - CMS1 dzieli org z projektem Parking i wyczerpał wspólny limit. Wizytówki nie działają do odblokowania (reset cyklu albo Pro $25).
+
+**Przyczyna (zdiagnozowana z kodu):**
+1. Tabela `reviews` nie ma unikalnego ograniczenia na `google_review_id`. `upsert` z `onConflict: 'google_review_id'` w cronie `sync-reviews` nie nadpisywał, tylko dokładał duplikaty (1140 kopii zamiast 2 realnych opinii - znany bug Audi Centrum Gdańsk). Napompowana tabela.
+2. Front strony Opinie pobiera wszystkie opinie raz (`/api/reviews`). Przy zduplikowanej tabeli jeden odczyt to megabajty. Kilkaset wejść = 5 GB.
+
+**Fix przygotowany off-line (NIE odpalony - baza leży 402):**
+- `sql/fix-review-duplicates.sql` - diagnostyka + dedup w transakcji (przepina alerty, zostawia wiersz z odpowiedzią/najnowszy) + unique constraint na `google_review_id`. KROK 1 usuwa dane, odpalać RAZEM krok po kroku na żywej bazie.
+- `src/app/api/reviews/route.js` - `select('*')` zmienione na konkretne kolumny (higiena, mniejszy payload). Niezacommitowane, w working tree.
+
+**Plan gdy baza wstanie:** KROK 0 diagnostyka → KROK 1 dedup (z weryfikacją) → KROK 2 constraint → deploy poprawki → sprawdzić egress przez dobę. Po naprawie Parking zostaje w tej samej org.
+
+**Otwarte:** data resetu cyklu w Billing (czekamy czy Pro $25). Decyzja o commicie poprawki (branch `fix/review-egress`).
+
 ## Stan prac w toku (2026-06-03)
 
 Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działających maili.
 
-1. **Weryfikacja produkcyjna OAuth (publish app)** - powód: apka jest w trybie Testing, przez co Google wygasza refresh_token co 7 dni i każdy user co tydzień traci dostęp. Scope `business.manage` jest **sensitive** (nie restricted), więc bez płatnego CASA, weryfikacja 3-5 dni roboczych. Wymaga własnej domeny + polityki prywatności + wideo demo.
-2. **Subdomena `wizytowki.plichta.com.pl`** podpinana do apki na Vercel. Rekordy CNAME (`06112434f9a48ae4.vercel-dns-017.com.`) + TXT (`google-site-verification=...`) **zlecone do IT** (czekamy). Domena odseparowana od hostingu, przeżyje migrację na VPS.
+1. **Publikacja OAuth (Testing → Production)** - ZROBIONE 2026-07-02. Apka przełączona na "In production" w Google Auth Platform. To rozwiązuje główny problem: w trybie Testing Google wygaszał refresh_token co 7 dni (cotygodniowe zamrażanie wizytówek). W produkcji tokeny są trwałe. **Weryfikacja Google świadomie ODPUSZCZONA** - to narzędzie wewnętrzne dla kilku osób, limit 100 userów i ekran ostrzegawczy "Google nie zweryfikowało tej aplikacji" (do kliknięcia Zaawansowane → Przejdź do) nie przeszkadzają. Weryfikacja wymagałaby demo video + logo, zysk zerowy przy 3 userach.
+   - **WAŻNE - jednorazowy reconnect:** tokeny wydane w trybie Testing nadal wygasną po swoich 7 dniach. Trwały token Google wydaje dopiero przy autoryzacji zrobionej JUŻ w produkcji. Każdy user musi raz: Settings → Odłącz Google → Połącz Google. Dotyczy Marcina, kolegi Audi, koleżanki VW. Po tym koniec cotygodniowego zamrażania.
+2. **Subdomena `wizytowki.plichta.com.pl`** podpięta do apki na Vercel. CNAME → `06112434f9a48ae4.vercel-dns-017.com` działa w PUBLICZNYM DNS (iq.pl), apka serwuje 200 na subdomenie. TXT `google-site-verification` na subdomenie ostatecznie NIEPOTRZEBNY - domena root `plichta.com.pl` jest już zweryfikowana w Search Console na koncie Marcina. **SPLIT-HORIZON DNS (2026-07-02):** firma hostuje wewnętrzną strefę `plichta.com.pl` na AD (`pladsrv01`, 192.168.40.10/11), gdzie rekordu `wizytowki` BRAKUJE → z sieci firmowej subdomena daje NXDOMAIN, z internetu działa. Zlecone do IT dodanie CNAME do wewnętrznej strefy AD. Nie blokuje Google (Google resolvuje przez publiczny DNS).
 3. **Strona `/privacy`** (`src/app/privacy/page.js`) wdrożona na produkcję (main) - wymóg weryfikacji Google. Dane Plichta + IOD inspektor@plichta.com.pl.
 4. **Reset hasła** - ZROBIONE i wdrożone na produkcję 2026-06-03. Strony `/forgot-password` + `/reset-password`, endpointy, kolumny `reset_token` + `reset_token_expires` w `users`, mail przez SMTP. Przetestowane end-to-end (mail dochodzi, zmiana hasła działa). Token ważny 1h, jednorazowy.
 5. **Maile przez firmowy SMTP zamiast Resend** - DZIAŁA od 2026-06-03. Firmowa skrzynka SMTP (dane w zmiennych `SMTP_HOST/PORT/USER/PASS/FROM` w Vercel env). Helper `src/lib/email.js` (`nodemailer`). Powód wyboru: brak vendor lock-in + przeżyje migrację na VPS. Resend nigdy nie był wdrożony.
