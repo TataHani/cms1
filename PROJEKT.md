@@ -59,7 +59,10 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
      - **Ekran z listą uprawnień** apka wymusza sama parametrem `prompt=consent` (`api/auth/connect-google/route.js:28`). Bez niego Google przy ponownej autoryzacji NIE wyda `refresh_token`, tylko godzinny access token, i synchronizacja umarłaby tego samego dnia. Ten ekran jest warunkiem działania, nie usterką.
      - **Ekran "Google nie zweryfikowało tej aplikacji"** (Zaawansowane → Przejdź do) zostaje, bo weryfikacja Google została świadomie odpuszczona.
      - Publikacja zmieniła **wyłącznie trwałość refresh tokena** (7 dni → długoterminowy). Sprawdzianem sukcesu nie jest brak ekranów, tylko to, czy po tygodniu synchronizacja nadal działa.
-2. **Subdomena `wizytowki.plichta.com.pl`** podpięta do apki na Vercel. CNAME → `06112434f9a48ae4.vercel-dns-017.com` działa w PUBLICZNYM DNS (iq.pl), apka serwuje 200 na subdomenie. TXT `google-site-verification` na subdomenie ostatecznie NIEPOTRZEBNY - domena root `plichta.com.pl` jest już zweryfikowana w Search Console na koncie Marcina. **SPLIT-HORIZON DNS (2026-07-02):** firma hostuje wewnętrzną strefę `plichta.com.pl` na AD (`pladsrv01`, 192.168.40.10/11), gdzie rekordu `wizytowki` BRAKUJE → z sieci firmowej subdomena daje NXDOMAIN, z internetu działa. Zlecone do IT dodanie CNAME do wewnętrznej strefy AD. Nie blokuje Google (Google resolvuje przez publiczny DNS).
+2. **Subdomena `wizytowki.plichta.com.pl`** - **DZIAŁA WSZĘDZIE, to podstawowy adres aplikacji** (zweryfikowane 2026-08-12). CNAME → `06112434f9a48ae4.vercel-dns-017.com` → 216.150.1.129 / 216.150.16.129. TXT `google-site-verification` na subdomenie ostatecznie NIEPOTRZEBNY - domena root `plichta.com.pl` jest już zweryfikowana w Search Console na koncie Marcina.
+   - **SPLIT-HORIZON DNS ROZWIĄZANY:** problem z 2026-07-02 (wewnętrzna strefa `plichta.com.pl` na AD `pladsrv01`, 192.168.40.10/11, bez rekordu `wizytowki` → NXDOMAIN z sieci firmowej) już nie występuje. IT dodało rekord: firmowe serwery DNS rozwiązują subdomenę poprawnie, `/login` zwraca 200 z sieci firmowej.
+   - **W komunikacji z użytkownikami używać `wizytowki.plichta.com.pl`**, nie adresu `cms1-rwp1.vercel.app`. Linki w mailach wysyłanych przez system (alert o negatywnej opinii z `sync-reviews`, ponaglenie 20h z `auto-respond`) przestawione na tę domenę 2026-08-12.
+   - **UWAGA:** adres `cms1-rwp1.vercel.app` nadal działa i **musi zostać** w `GOOGLE_REDIRECT_URI` - jest wpisany w Google Cloud Console jako authorized redirect URI. Zmiana wymagałaby edycji konfiguracji OAuth po stronie Google, więc logowanie przez Google celowo zostaje na adresie Vercela.
 3. **Strona `/privacy`** (`src/app/privacy/page.js`) wdrożona na produkcję (main) - wymóg weryfikacji Google. Dane Plichta + IOD inspektor@plichta.com.pl.
 4. **Reset hasła** - ZROBIONE i wdrożone na produkcję 2026-06-03. Strony `/forgot-password` + `/reset-password`, endpointy, kolumny `reset_token` + `reset_token_expires` w `users`, mail przez SMTP. Przetestowane end-to-end (mail dochodzi, zmiana hasła działa). Token ważny 1h, jednorazowy.
 5. **Maile przez firmowy SMTP zamiast Resend** - DZIAŁA od 2026-06-03. Firmowa skrzynka SMTP (dane w zmiennych `SMTP_HOST/PORT/USER/PASS/FROM` w Vercel env). Helper `src/lib/email.js` (`nodemailer`). Powód wyboru: brak vendor lock-in + przeżyje migrację na VPS. Resend nigdy nie był wdrożony.
@@ -121,7 +124,8 @@ Wewnętrzna nazwa: **GMB Manager** (`package.json: "gmb-manager"`).
 
 ## URL produkcyjny i repo
 
-- **Produkcja:** https://cms1-rwp1.vercel.app/
+- **Produkcja (adres dla użytkowników):** https://wizytowki.plichta.com.pl
+- **Adres techniczny Vercela:** https://cms1-rwp1.vercel.app/ (działa, wymagany przez OAuth Google)
 - **GitHub:** https://github.com/TataHani/cms1 (branch `main`)
 - **Lokalna ścieżka:** `C:\projekty\cms1`
 

@@ -25,7 +25,7 @@ const ALERT_AT_H = 20        // 1-2*: ponaglenie do ludzi
 const NEG_PUBLISH_AT_H = 23  // 1-2*: auto-publikacja jesli nadal cisza
 const POS_PUBLISH_AT_H = 22  // 3-5*: auto-publikacja po cichu
 
-const APP_URL = 'https://cms1-rwp1.vercel.app'
+const APP_URL = 'https://wizytowki.plichta.com.pl'
 
 // Etap 2: sztywne formulki. W etapie 3 podmieniamy na Claude API.
 function buildSuggestion(review, business) {

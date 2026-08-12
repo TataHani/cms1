@@ -222,7 +222,7 @@ export async function GET(request) {
                           <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
                           <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
                           <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
-                          <p><a href="https://cms1-rwp1.vercel.app/reviews">Zobacz w aplikacji</a></p>
+                          <p><a href="https://wizytowki.plichta.com.pl/reviews">Zobacz w aplikacji</a></p>
                         `
                       )
                     } catch (e) {
