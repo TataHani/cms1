@@ -54,7 +54,8 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 
 10. **Wydajność list opinii** - ZROBIONE 2026-06-03. Strony `/reviews` i `/business/[id]` renderowaly wszystkie opinie naraz (Audi 1139) i zawieszaly Chrome. Teraz: sortowanie od najnowszej, **50 opinii/strone** + paginacja, filtr daty (szybkie zakresy Dzis/7d/30d/Wszystkie + wlasny zakres od-do). Domyslnie najnowsze 50.
 
-8. **System auto-odpowiedzi na opinie** - kod wdrożony na produkcję (main) 2026-06-03, ale w fazie **UŚPIONEJ**: auto-publikacja NIE działa, dopóki nie zostanie dodany cron `auto-respond` w cron-job.org.
+8. **System auto-odpowiedzi na opinie** - **AKTYWNY od 2026-08-12**. Cron `auto-respond` dodany w cron-job.org (co 15 min), auto-publikacja do Google działa. Jakość propozycji AI zweryfikowana ręcznie na kilkunastu opiniach przed włączeniem (polska odmiana, forma grzecznościowa, brak polemiki przy negatywnych - wszystko OK). Kod wdrożony na produkcję 2026-06-03, uśpiony do 2026-08-12.
+   - **Wyłączenie awaryjne:** wyłączyć zadanie `auto-respond` w cron-job.org. Publikacja staje natychmiast. Odpowiedzi już opublikowanych w Google to NIE cofa.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
    - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
    - **AI:** Claude **Sonnet 4.6** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki. Klucz `ANTHROPIC_API_KEY` dodany do Vercel 2026-06-03, działa. (Początkowo Haiku 4.5, podbity na Sonnet 2026-06-03 bo Haiku robił błędy polskiej odmiany. Prompt pisany poprawną polszczyzną z ogonkami + instrukcja formy grzecznościowej.)
@@ -65,7 +66,7 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
      - (a) ~~Dodać `ANTHROPIC_API_KEY` do Vercel env~~ - ZROBIONE 2026-06-03, klucz działa.
      - (b) **Przetestować jakość propozycji AI w UI** (przycisk "Zaproponuj AI") - NADAL OTWARTE, zrobić przed krokiem (d).
      - (c) ~~Zaktualizować stałą `CUTOFF`~~ - ZROBIONE 2026-08-12, ustawiona na `2026-08-12T00:00:00Z`.
-     - (d) Dodać zadanie crona `/api/cron/auto-respond` co 15 min z headerem `x-cron-secret` w cron-job.org → DOPIERO to uruchamia auto-publikację.
+     - (d) ~~Dodać zadanie crona `/api/cron/auto-respond` co 15 min~~ - ZROBIONE 2026-08-12, system aktywny.
 
    - **ZABEZPIECZENIA auto-publikacji (dodane 2026-08-12):**
      - `CUTOFF = 2026-08-12T00:00:00Z` - system nie tyka opinii starszych niż moment uruchomienia. Stara wartość (2026-06-03) oznaczałaby, że pierwszy bieg crona opublikuje w Google odpowiedzi na całą zaległą historię od czerwca. Po reimporcie VW to setki opinii. **Publikacja w Google jest nieodwracalna.**
@@ -358,7 +359,16 @@ group by b.id, b.title order by najnowsza_opinia desc nulls last;
 
 ## Cron-job.org
 
-Sync uruchamiany automatycznie przez zewnętrzny scheduler **cron-job.org** (wywołuje `/api/cron/sync-reviews` z headerem `x-cron-secret`).
+Dwa zadania w zewnętrznym schedulerze **cron-job.org**, oba z headerem `x-cron-secret`:
+
+| Zadanie | Endpoint | Częstotliwość | Od kiedy |
+|---|---|---|---|
+| Sync opinii | `/api/cron/sync-reviews` | co 5 min | 2026-05 |
+| Auto-odpowiedzi | `/api/cron/auto-respond` | co 15 min | **2026-08-12** |
+
+Wyłączenie zadania `auto-respond` w cron-job.org to awaryjny stop auto-publikacji.
+
+### Sync opinii
 
 - Częstotliwość: **co 5 minut**
 - Cron odświeża tokeny i ściąga nowe opinie dla wszystkich połączeń ze świeżym refresh_token
