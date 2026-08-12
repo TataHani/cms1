@@ -300,6 +300,10 @@ Odmrożenie konta VW poszło **starą, destrukcyjną instrukcją** ("Odłącz Go
 
 **Co sync odbudował:** treści opinii, oceny, odpowiedzi opublikowane w Google.
 
+**Licznik zatrzymał się na 5037 i to jest POPRAWNA liczba** (zweryfikowane wyrywkowo 2026-08-12 przez porównanie z Google dla VW Gdańsk Lubowidzka, VW Elbląg i VW Bydgoszcz - zgadza się co do sztuki). Różnica 7785 → 5037 to NIE utrata danych, tylko usunięcie "duchów": sync robi wyłącznie `upsert` i **nigdy nie kasuje opinii, które Google przestał zwracać** (spam, naruszenia regulaminu, opinie skasowane przez autorów). Przez lata takie rekordy osadzały się w bazie, bo nic ich nie sprzątało. Import od zera ściągnął wyłącznie stan faktyczny z Google.
+
+**Konsekwencja dla pozostałych marek:** liczniki Audi (3356) i Forda (656) nadal zawierają swoje duchy, bo te wizytówki nie przeszły pełnego reimportu. Przy porównaniu z Google pokażą wartości zawyżone. To nie awaria, tylko brak mechanizmu sprzątania. Ewentualna naprawa: w sync oznaczać jako usunięte opinie, których nie ma w odpowiedzi Google dla danej wizytówki (uwaga: wymaga pełnego pobrania, więc kłóci się z inkrementalnym syncem).
+
 **Czego NIE odbudował (Google o tym nie wie):**
 - `business_permissions` - uprawnienia userów, nadane ponownie ręcznie 2026-08-12
 - `alert_settings` - konfiguracja alertów per wizytówka
