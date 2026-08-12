@@ -44,7 +44,7 @@ export async function GET() {
 
   const { data: reviews, error } = await supabase
     .from('reviews')
-    .select('*')
+    .select('id, business_id, reviewer_name, star_rating, comment, has_reply, reply_comment, reply_update_time, is_new, is_edited, create_time, suggested_reply')
     .in('business_id', businessIds)
     .order('create_time', { ascending: false })
     .limit(50000)

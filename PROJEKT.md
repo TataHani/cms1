@@ -1,22 +1,32 @@
 # PROJEKT.md - CMS1 (GMB Manager)
 
-Status na dzień: **2026-05-26** (sekcja "Stan prac w toku" zaktualizowana 2026-06-03)
+Status na dzień: **2026-08-12** (sekcja "Stan prac w toku" zaktualizowana 2026-06-03)
 
-## KRYTYCZNE - apka zablokowana egressem (2026-06-10)
+## ROZWIĄZANE - blokada egressem i duplikaty opinii (zamknięte 2026-08-12)
 
-**Stan:** Supabase zwraca 402 (Egress Exceeded). Przekroczony limit 5 GB transferu na darmowym planie. Limit liczony per ORGANIZACJA - CMS1 dzieli org z projektem Parking i wyczerpał wspólny limit. Wizytówki nie działają do odblokowania (reset cyklu albo Pro $25).
+**Historia problemu (2026-06-10):** Supabase zwracał 402 (Egress Exceeded), limit 5 GB liczony per ORGANIZACJA (CMS1 dzieli org z projektem Parking). Diagnoza: brak unikalnego ograniczenia na `reviews.google_review_id` powodował, że `upsert` z `onConflict` w cronie dokładał duplikaty zamiast nadpisywać (1140 kopii zamiast 2 opinii - Audi Centrum Gdańsk). Napompowana tabela + front pobierający wszystkie opinie naraz = wyczerpany transfer.
 
-**Przyczyna (zdiagnozowana z kodu):**
-1. Tabela `reviews` nie ma unikalnego ograniczenia na `google_review_id`. `upsert` z `onConflict: 'google_review_id'` w cronie `sync-reviews` nie nadpisywał, tylko dokładał duplikaty (1140 kopii zamiast 2 realnych opinii - znany bug Audi Centrum Gdańsk). Napompowana tabela.
-2. Front strony Opinie pobiera wszystkie opinie raz (`/api/reviews`). Przy zduplikowanej tabeli jeden odczyt to megabajty. Kilkaset wejść = 5 GB.
+**Stan po weryfikacji 2026-08-12:**
+- Baza działa, 402 nie występuje.
+- `select count(*), count(distinct google_review_id) from reviews` → **11771 wierszy, 11771 unikalnych, 0 duplikatów**. Tabela czysta.
+- Constraint **`reviews_google_review_id_key UNIQUE (google_review_id)` ISTNIEJE** w bazie (KROK 2 skryptu został odpalony). Duplikaty fizycznie nie mogą już powstać.
+- Kod jest spójny z constraintem: `onConflict: 'google_review_id'` w `api/cron/sync-reviews/route.js:187` i `api/reviews/sync/route.js:168`.
+- `src/app/api/reviews/route.js` - `select('*')` zmienione na listę konkretnych kolumn (mniejszy payload przy 11771 opiniach). Zacommitowane na branchu `fix/review-egress`.
+- Redundancja do odnotowania: obok węższego constraintu istnieje też `reviews_business_id_google_review_id_key UNIQUE (business_id, google_review_id)`. Nieszkodliwy, nie ruszamy.
 
-**Fix przygotowany off-line (NIE odpalony - baza leży 402):**
-- `sql/fix-review-duplicates.sql` - diagnostyka + dedup w transakcji (przepina alerty, zostawia wiersz z odpowiedzią/najnowszy) + unique constraint na `google_review_id`. KROK 1 usuwa dane, odpalać RAZEM krok po kroku na żywej bazie.
-- `src/app/api/reviews/route.js` - `select('*')` zmienione na konkretne kolumny (higiena, mniejszy payload). Niezacommitowane, w working tree.
+**Skrypt `sql/fix-review-duplicates.sql`** zostaje w repo jako dokumentacja naprawy. KROK 1 (dedup) i KROK 2 (constraint) są WYKONANE - nie odpalać ponownie.
 
-**Plan gdy baza wstanie:** KROK 0 diagnostyka → KROK 1 dedup (z weryfikacją) → KROK 2 constraint → deploy poprawki → sprawdzić egress przez dobę. Po naprawie Parking zostaje w tej samej org.
+## Weryfikacja działania aplikacji (2026-08-12)
 
-**Otwarte:** data resetu cyklu w Billing (czekamy czy Pro $25). Decyzja o commicie poprawki (branch `fix/review-egress`).
+| Sprawdzenie | Wynik |
+|---|---|
+| `https://cms1-rwp1.vercel.app/` | 200 |
+| `/login`, `/privacy` | 200 |
+| `/api/reviews` bez sesji | 401 (poprawnie, auth działa) |
+| `https://wizytowki.plichta.com.pl/` | **200** - subdomena odpowiada |
+| `npm run build` | przechodzi czysto (37 tras) |
+
+**Uwaga o buildzie lokalnym:** w repo NIE ma pliku `.env.local`, więc `npm run build` pada na `Error: supabaseUrl is required` w fazie "Collecting page data". To nie błąd kodu - klienci Supabase tworzeni są na poziomie modułu w route handlerach. Do zbudowania lokalnie wystarczą atrapy zmiennych (`NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`), bo połączenie nawiązywane jest dopiero przy zapytaniu. Na Vercelu env są ustawione, build przechodzi.
 
 ## Stan prac w toku (2026-06-03)
 
@@ -47,7 +57,7 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
    - **Forma grzecznościowa:** model dostaje imię autora opinii (`reviewer_name`) i dobiera formę wg płci wynikającej z imienia (Pana/Pani z odmianą); gdy imię niejednoznaczne/zagraniczne/"Anonim", pisze neutralnie bez "Pan/Pani". Endpoint `suggest` pobiera `reviewer_name` w select.
    - **Kolumny w `reviews`:** `alert_sent_at`, `auto_replied_at`, `is_auto_reply`, `suggested_reply` (dodane).
    - **OTWARTE TODO przed włączeniem auto-publikacji:**
-     - (a) **Dodać `ANTHROPIC_API_KEY`** do Vercel env (Marcin, jeszcze NIE zrobione) - bez tego "Zaproponuj AI" i auto-AI nie działają.
+     - (a) ~~Dodać `ANTHROPIC_API_KEY` do Vercel env~~ - ZROBIONE 2026-06-03, klucz działa.
      - (b) Przetestować jakość propozycji AI w UI (przycisk "Zaproponuj AI").
      - (c) Zaktualizować stałą `CUTOFF` w `src/app/api/cron/auto-respond/route.js` na realny moment startu (inaczej pierwszy bieg crona zaleje stare opinie auto-odpowiedziami).
      - (d) Dodać zadanie crona `/api/cron/auto-respond` co 15 min z headerem `x-cron-secret` w cron-job.org → DOPIERO to uruchamia auto-publikację.
@@ -79,7 +89,7 @@ Wewnętrzna nazwa: **GMB Manager** (`package.json: "gmb-manager"`).
 | UI | React 18.2.0 + Tailwind 3.4.1 + lucide-react (ikony) |
 | Baza | Supabase Cloud (Postgres) |
 | Auth | Custom (cookie `user_id` + SHA256 hash w bazie) + Google OAuth |
-| Integracje | Google Business Profile API (v1 i v4), Resend (email) |
+| Integracje | Google Business Profile API (v1 i v4), firmowy SMTP przez nodemailer (email), Anthropic API (auto-odpowiedzi) |
 | Hosting | Vercel Pro (od 2026-05-26, na 1 miesiąc) |
 
 **Brak:** TypeScript, Zod, testów, ESLint, monorepo (Turborepo).
@@ -94,9 +104,16 @@ Wymagane do działania:
 - `GOOGLE_REDIRECT_URI` - callback do logowania przez Google (np. `https://cms1-rwp1.vercel.app/api/auth/callback/google`)
 - `CRON_SECRET` - sekret do autoryzacji crona sync-reviews
 
+Email (firmowy SMTP, `src/lib/email.js`) - bez nich maile alertów, resetu hasła i feedbacku nie wychodzą:
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+- `FEEDBACK_EMAIL` - adres odbiorcy zgłoszeń z przycisku "Zgłoś uwagę"
+
+AI (auto-odpowiedzi i przycisk "Zaproponuj AI"):
+- `ANTHROPIC_API_KEY` - ustawiony w Vercel od 2026-06-03
+
 Opcjonalne:
 - `GOOGLE_REDIRECT_URI_CONNECT` - oddzielny callback dla podpinania konta Google (fallback: podmiana `/callback/google` na `/callback/google-connect` w `GOOGLE_REDIRECT_URI`)
-- `RESEND_API_KEY` - klucz Resend; bez niego maile alertów nie wychodzą
+- ~~`RESEND_API_KEY`~~ - Resend NIGDY nie został wdrożony, zastąpiony firmowym SMTP
 
 ## Struktura kodu
 
@@ -193,7 +210,7 @@ src/app/
 - Pobieranie wizytówek z Google Business Profile API
 - Pobieranie opinii z paginacją - **iteruje po wszystkich połączeniach Google użytkownika** (fix `c6d470d`)
 - Odpowiadanie na opinie (Google API v4 + zapis do DB)
-- Cron sync-reviews (chroniony `CRON_SECRET`, wysyła maile przez Resend, wywoływany z cron-job.org)
+- Cron sync-reviews (chroniony `CRON_SECRET`, wysyła maile przez firmowy SMTP `src/lib/email.js`, wywoływany z cron-job.org)
 - Alerty in-app + per-business email
 - Analiza: statystyki, dystrybucja, ranking, trend (12 miesięcy)
 - Benchmark vs konkurencja (dane z `competitors` wypełniane ręcznie)
