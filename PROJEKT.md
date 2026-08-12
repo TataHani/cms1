@@ -79,9 +79,9 @@ Wewnętrzna nazwa: **GMB Manager** (`package.json: "gmb-manager"`).
 - Hasło Marcina trzymane w menedżerze haseł (zresetowane 2026-08-12 przez token z bazy, patrz niżej)
 - Rola: zależy od kolumny `role` w tabeli `users` (`admin` lub `user`)
 
-### Odzyskanie dostępu gdy maile nie wychodzą (sprawdzone 2026-08-12)
+### Odzyskanie dostępu gdy mail resetu nie dociera (sprawdzone 2026-08-12)
 
-Formularz `/forgot-password` **zapisuje token resetu do bazy ZANIM spróbuje wysłać maila** (`api/auth/forgot-password/route.js:29`), a błąd wysyłki jest połykany i endpoint zawsze zwraca `success: true` (linie 48-52). Skutek uboczny: nawet przy martwym SMTP token istnieje i wystarczy odczytać go z bazy.
+Formularz `/forgot-password` **zapisuje token resetu do bazy ZANIM spróbuje wysłać maila** (`api/auth/forgot-password/route.js:29`), a błąd wysyłki jest połykany i endpoint zawsze zwraca `success: true` (linie 48-52). Skutek uboczny: token istnieje niezależnie od losu maila i wystarczy odczytać go z bazy.
 
 1. Kliknąć wyślij na `/forgot-password` (komunikat o wysłaniu pojawi się niezależnie od stanu SMTP)
 2. W Supabase SQL Editor:
@@ -94,7 +94,11 @@ from users where reset_token is not null order by reset_token_expires desc;
 
 Ta droga jest lepsza niż podmiana hashu SHA256 SQL-em, bo hasło nie trafia do historii zapytań Supabase.
 
-**BUG do naprawy:** `/forgot-password` powinien odróżniać "mail wysłany" od "wysyłka padła". Teraz użytkownik dostaje potwierdzenie mimo cichej awarii SMTP. Komunikat może zostać neutralny (żeby nie zdradzać czy email istnieje w bazie), ale błąd wysyłki powinien trafiać do logów jako wyraźna awaria, a nie `console.error` bez konsekwencji.
+**SMTP DZIAŁA** (potwierdzone 2026-08-12): reset hasła dla drugiego konta Marcina (tego z wizytówkami Forda) wysłał maila, link dotarł normalnie. Wcześniejsza hipoteza o martwym SMTP i niedziałających alertach o opiniach jest **nieprawdziwa**. Wysyłka alertów `1-2★` przez `src/lib/email.js` należy uznać za sprawną.
+
+**Nierozstrzygnięte:** dla pierwszego konta Marcina mail resetu NIE dotarł, mimo działającego SMTP. Podejrzenie: nieaktualny lub błędny adres w `users.email` na tym koncie, ewentualnie filtr antyspamowy. Konsekwencja jest poważniejsza niż sam reset hasła - na to konto nie dotrze też ŻADEN alert o negatywnej opinii. Do sprawdzenia: `select id, email, role from users order by created_at;` i porównanie z realnie działającymi skrzynkami.
+
+**BUG do naprawy:** `/forgot-password` nie odróżnia "mail wysłany" od "wysyłka padła" - użytkownik dostaje potwierdzenie w obu przypadkach. Komunikat na froncie może zostać neutralny (żeby nie zdradzać, czy email istnieje w bazie), ale błąd wysyłki powinien być widoczny jako wyraźna awaria, a nie `console.error` bez konsekwencji. Ta cicha awaria maskuje dokładnie ten przypadek opisany wyżej.
 
 ## Stack
 
