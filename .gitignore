@@ -29,3 +29,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# maile robocze do wyslania (tresci wewnetrzne, nie naleza do repo aplikacji)
+/maile
