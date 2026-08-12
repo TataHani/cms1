@@ -278,17 +278,35 @@ Dziś zpushowane commity:
 
 **Supabase Settings:** `Max Rows` podniesiony z 1000 do **50000** (Settings -> API -> Max Rows). Bez tego `.limit(50000)` w kodzie i tak był capowany na max_rows projektu.
 
-## Stan synchronizacji per marka (zweryfikowane 2026-08-12)
+## Stan synchronizacji per marka
 
-**18 wizytówek w bazie** (w tym 1x "Testowa firma" bez opinii), łącznie 11771 opinii.
+### Stan końcowy 2026-08-12 (po odmrożeniu) - WSZYSTKO SYNCHRONIZUJE SIĘ
 
-| Grupa | Wizytówek | Opinii | Najnowsza opinia | Stan |
-|---|---|---|---|---|
-| Audi | 6 | 3356 | 2026-08-11 | **DZIAŁA** |
-| Volkswagen | 10 | 7785 | 2026-06-08 | **ZAMROŻONE ~2 mies.** |
-| Ford Gdańsk | 1 | 632 | 2026-05-25 | **ZAMROŻONE ~2,5 mies.** |
+| Grupa | Wizytówek | Najnowsza opinia | Stan |
+|---|---|---|---|
+| Audi | 6 | 2026-08-11 | działa nieprzerwanie |
+| Volkswagen | 10 | 2026-08-11 | **ODMROŻONE**, opinie odbudowywane po kaskadzie |
+| Ford Gdańsk | 1 | 2026-08-05 | **ODMROŻONE** (632 → 656 opinii) |
 
-Przy salonach z 1700+ opiniami (VW Gdańsk, VW Toruń) dwumiesięczna cisza jest nierealna - to wygasłe refresh tokeny, nie brak opinii. Zgodne z mechanizmem opisanym w pkt 1 "Stan prac w toku": tokeny wydane w trybie Testing wygasają po 7 dniach, a jednorazowy reconnect po publikacji OAuth do produkcji NIE został wykonany dla kont VW i Ford.
+Wszystkie trzy połączenia Google mają świeże tokeny odświeżane przez cron. Uprawnienia userów do wizytówek VW zostały nadane ponownie 2026-08-12 (skasowała je kaskada, patrz niżej).
+
+**Testowa wizytówka** ukryta przez nowy przycisk w panelu admina, dlatego zapytania z `hidden = false` pokazują dla konta Marcina 1 wizytówkę zamiast 2.
+
+### INCYDENT 2026-08-12: reconnect przez "Odlacz" skasował dane VW
+
+Stan wyjściowy tego dnia: Audi 3356 opinii (działało), VW 7785 opinii (zamrożone od 2026-06-08), Ford 632 opinie (zamrożone od 2026-06-02). Przyczyną zamrożenia były refresh tokeny wydane jeszcze w trybie Testing, które Google unieważnia po 7 dniach.
+
+Odmrożenie konta VW poszło **starą, destrukcyjną instrukcją** ("Odłącz Google → Połącz Google"), która obowiązywała w tym pliku do 2026-08-12. Efekt: `delete` na `businesses` pociągnął kaskadę i liczba opinii VW spadła z 7785 do 5037, po czym cron zaczął odbudowywać je od zera z Google.
+
+**Co sync odbudował:** treści opinii, oceny, odpowiedzi opublikowane w Google.
+
+**Czego NIE odbudował (Google o tym nie wie):**
+- `business_permissions` - uprawnienia userów, nadane ponownie ręcznie 2026-08-12
+- `alert_settings` - konfiguracja alertów per wizytówka
+- `suggested_reply` i `is_auto_reply` - propozycje AI i znaczniki auto-odpowiedzi
+- historia alertów
+
+**Wniosek na przyszłość:** reconnect ZAWSZE przez samo "Polacz konto". Przycisk "Odlacz" jest destrukcyjny do czasu naprawy opisanej niżej.
 
 **Odmrożenie:** właściciel konta loguje się do cms1 -> /settings -> **"Polacz konto"** i wybiera to samo konto Google (**bez klikania "Odlacz"**). Dopiero autoryzacja zrobiona w trybie produkcyjnym daje trwały token. Adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
 
