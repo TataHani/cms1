@@ -2,6 +2,26 @@
 
 Status na dzień: **2026-08-12** (sekcja "Stan prac w toku" zaktualizowana 2026-06-03)
 
+## Podsumowanie sesji 2026-08-12
+
+Skrót tego, co zmieniło się tego dnia. Szczegóły w sekcjach niżej.
+
+| Obszar | Wynik |
+|---|---|
+| Blokada egressem + duplikaty opinii | **ZAMKNIĘTE**. Baza działa, 0 duplikatów, constraint chroni na stałe. Poprawka payloadu `/api/reviews` na produkcji. |
+| Synchronizacja VW (10 wizytówek) i Ford | **ODMROŻONE** po reconnectach Google. Stały od czerwca na wygasłych tokenach. |
+| Incydent kaskady przy reconnekcie VW | Opinie odbudowane z Google (5037 = stan zgodny z Google, stare 7785 zawierało "duchy"). Uprawnienia userów nadane ponownie ręcznie. |
+| Usuwanie wizytówek z panelu admina | **NOWA FUNKCJA** (ukrywanie flagą `hidden`, odporne na resync). Testowa wizytówka usunięta. |
+| Auto-odpowiedzi AI na opinie | **URUCHOMIONE**. Cron co 15 min, `CUTOFF` na moment startu, limit 10 publikacji na bieg. |
+| SMTP i alerty mailowe | Działają (potwierdzone mailem resetu hasła). |
+| Odzyskiwanie hasła bez działającego maila | Procedura przez token z bazy, opisana niżej. |
+
+**Znalezione i NIE naprawione** (opisane w dokumentacji z lokalizacją w kodzie):
+1. Przycisk "Odlacz" w /settings kasuje wizytówki kaskadowo razem z opiniami i uprawnieniami.
+2. `/forgot-password` zawsze zwraca sukces, także gdy wysyłka maila padnie.
+
+**Pułapki diagnostyczne udokumentowane tego dnia:** `businesses.last_synced_at` nie mówi nic o świeżości opinii; `google_connections.token_expires_at` dotyczy godzinnego access tokena i jest w UTC; niepusty `refresh_token` nie oznacza działającego połączenia.
+
 ## ROZWIĄZANE - blokada egressem i duplikaty opinii (zamknięte 2026-08-12)
 
 **Historia problemu (2026-06-10):** Supabase zwracał 402 (Egress Exceeded), limit 5 GB liczony per ORGANIZACJA (CMS1 dzieli org z projektem Parking). Diagnoza: brak unikalnego ograniczenia na `reviews.google_review_id` powodował, że `upsert` z `onConflict` w cronie dokładał duplikaty zamiast nadpisywać (1140 kopii zamiast 2 opinii - Audi Centrum Gdańsk). Napompowana tabela + front pobierający wszystkie opinie naraz = wyczerpany transfer.
