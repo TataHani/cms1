@@ -521,7 +521,7 @@ Pełna historia: `git log --oneline` w katalogu projektu.
 ### Co zostało otwarte
 
 - **Milena (zastępczyni osoby od VW) nie ma konta.** Ma się zarejestrować na `/register` i dać znać, wtedy nadać uprawnienia do wizytówek VW.
-- **Mail informacyjny do zespołu** przygotowany, czeka na wysłanie: `C:\projekty\cms1\maile\2026-08-12-wizytowki-info.html` (folder `maile` w `.gitignore`).
+- ~~Mail informacyjny do zespołu~~ - **WYSŁANY 2026-08-12** do osób od Audi i VW oraz zastępczyni od VW. Treść: `C:\projekty\cms1\maile\2026-08-12-wizytowki-info.html` (folder `maile` w `.gitignore`). Prosi o obserwację przez tydzień: czy opinie się pojawiają, czy alerty o negatywnych docierają (także spam), czy auto-odpowiedzi brzmią sensownie.
 - **Obserwacja auto-odpowiedzi przez pierwszą dobę** - pierwsze publikacje spodziewane wieczorem 12.08.
 - **BUG: "Odlacz" kasuje wizytówki kaskadowo** wraz z opiniami, alertami, uprawnieniami. Do naprawy: zerować `google_connection_id` zamiast `delete`.
 - **BUG: `/forgot-password` zawsze zwraca sukces**, także gdy wysyłka padnie.
