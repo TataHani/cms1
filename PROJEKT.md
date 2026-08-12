@@ -503,3 +503,49 @@ b9d5a45 fix: use mybusinessreviews.googleapis.com/v1 for reply endpoint (v4 depr
 ```
 
 Pełna historia: `git log --oneline` w katalogu projektu.
+
+---
+
+## Sesja 2026-08-12
+
+### Co zrobiliśmy
+
+1. **Zamknięty temat egressu i duplikatów.** Baza wstała, weryfikacja: 11771 wierszy = 11771 unikalnych, 0 duplikatów. Constraint `reviews_google_review_id_key UNIQUE (google_review_id)` już był w bazie. Wdrożona poprawka `select('*')` → konkretne kolumny w `/api/reviews`.
+2. **Odmrożone VW (10 wizytówek) i Ford.** Stały od czerwca na unieważnionych refresh tokenach. Po reconnektach wszystkie trzy połączenia Google synchronizują się.
+3. **Incydent kaskady.** Reconnect konta VW poszedł starą instrukcją ("Odłącz → Połącz"), co skasowało wizytówki wraz z opiniami i uprawnieniami. Sync odbudował treści (5037 opinii = stan zgodny z Google; stare 7785 zawierało rekordy usunięte po stronie Google). Uprawnienia nadane ponownie ręcznie.
+4. **Nowa funkcja: usuwanie wizytówek z panelu admina** przez flagę `hidden` (endpoint `DELETE /api/admin/businesses/[id]`, migracja `sql/add-hidden-to-businesses.sql`, filtry w 9 miejscach). Testowa wizytówka usunięta.
+5. **Uruchomiony system auto-odpowiedzi AI.** `CUTOFF` przestawiony na moment startu, dodany limit `MAX_PUBLISH_PER_RUN = 10`, cron dodany w cron-job.org. Jakość propozycji zweryfikowana ręcznie na kilkunastu opiniach.
+6. **Potwierdzone, że SMTP działa** (mail resetu hasła dotarł). Wcześniejsza hipoteza o martwych alertach była błędna.
+7. **Odkryte, że split-horizon DNS jest rozwiązany** - firmowe serwery AD rozwiązują `wizytowki.plichta.com.pl`. Linki w mailach systemowych przestawione na tę domenę.
+
+### Co zostało otwarte
+
+- **Milena (zastępczyni osoby od VW) nie ma konta.** Ma się zarejestrować na `/register` i dać znać, wtedy nadać uprawnienia do wizytówek VW.
+- **Mail informacyjny do zespołu** przygotowany, czeka na wysłanie: `C:\projekty\cms1\maile\2026-08-12-wizytowki-info.html` (folder `maile` w `.gitignore`).
+- **Obserwacja auto-odpowiedzi przez pierwszą dobę** - pierwsze publikacje spodziewane wieczorem 12.08.
+- **BUG: "Odlacz" kasuje wizytówki kaskadowo** wraz z opiniami, alertami, uprawnieniami. Do naprawy: zerować `google_connection_id` zamiast `delete`.
+- **BUG: `/forgot-password` zawsze zwraca sukces**, także gdy wysyłka padnie.
+- **Otwarta rejestracja** - konto może założyć każdy, kto zna adres (bez uprawnień nic nie widzi). Rozważyć ograniczenie do adresów firmowych.
+
+### Parametry, ścieżki, komendy
+
+```sql
+-- czy synchronizacja zyje (NIE uzywac last_synced_at, patrz pulapka wyzej)
+select b.title, max(r.create_time) as najnowsza_opinia, count(r.id) as opinii
+from businesses b left join reviews r on r.business_id = b.id
+group by b.id, b.title order by najnowsza_opinia desc nulls last;
+
+-- co system opublikowal automatycznie
+select b.title, r.star_rating, r.reviewer_name, r.reply_comment, r.auto_replied_at
+from reviews r join businesses b on b.id = r.business_id
+where r.is_auto_reply = true order by r.auto_replied_at desc;
+
+-- nadanie uprawnien do wszystkich wizytowek VW naraz
+insert into business_permissions (user_id, business_id)
+select u.id, b.id from users u, businesses b
+where u.email = 'ADRES' and b.title ilike '%volkswagen%' and b.hidden = false;
+```
+
+- Build lokalny wymaga atrap zmiennych (brak `.env.local`): `$env:NEXT_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"` itd., inaczej pada na "Collecting page data".
+- Okna czasowe auto-odpowiedzi: `ALERT_AT_H = 20`, `NEG_PUBLISH_AT_H = 23`, `POS_PUBLISH_AT_H = 22` w `api/cron/auto-respond/route.js`.
+- Awaryjny stop auto-publikacji: wyłączyć zadanie `auto-respond` w cron-job.org.
