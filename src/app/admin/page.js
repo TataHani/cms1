@@ -75,6 +75,25 @@ export default function AdminPage() {
     }
   }
 
+  const hideBusiness = async (business) => {
+    const confirmed = confirm(
+      'Usunac wizytowke "' + business.title + '" z aplikacji?\n\n' +
+      'Wizytowka zniknie z list, statystyk i synchronizacji. ' +
+      'Opinie zostaja w bazie - mozna ja przywrocic w Supabase komenda:\n' +
+      "update businesses set hidden = false where id = '" + business.id + "';"
+    )
+    if (!confirmed) return
+
+    try {
+      const res = await fetch('/api/admin/businesses/' + business.id, { method: 'DELETE' })
+      if (res.ok) {
+        setBusinesses(businesses.filter(b => b.id !== business.id))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
   const getUserPermissions = (userId) => {
     return permissions.filter(p => p.user_id === userId)
   }
@@ -223,10 +242,17 @@ export default function AdminPage() {
                       <div className="w-10 h-10 bg-gradient-to-br from-emerald-100 to-cyan-100 rounded-lg flex items-center justify-center">
                         <Building2 size={18} className="text-emerald-600" />
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <p className="font-medium text-slate-900">{business.title}</p>
                         <p className="text-sm text-slate-500">{business.category}</p>
                       </div>
+                      <button
+                        onClick={() => hideBusiness(business)}
+                        title="Usun wizytowke z aplikacji"
+                        className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                     <div className="ml-13">
                       <p className="text-xs text-slate-500 mb-1">

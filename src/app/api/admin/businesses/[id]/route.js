@@ -6,7 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
-export async function GET() {
+// Ukrywa wizytowke zamiast ja kasowac. Twardy DELETE pociagnalby kaskade
+// (opinie, alerty, uprawnienia, konkurencja, ustawienia alertow), a sama
+// wizytowka wrocilaby przy nastepnym polaczeniu konta Google.
+export async function DELETE(request, { params }) {
   const cookieStore = cookies()
   const userId = cookieStore.get('user_id')?.value
 
@@ -24,15 +27,14 @@ export async function GET() {
     return Response.json({ error: 'Not authorized' }, { status: 403 })
   }
 
-  const [usersRes, businessesRes, permissionsRes] = await Promise.all([
-    supabase.from('users').select('*').order('created_at'),
-    supabase.from('businesses').select('*').eq('hidden', false).order('title'),
-    supabase.from('business_permissions').select('*')
-  ])
+  const { error } = await supabase
+    .from('businesses')
+    .update({ hidden: true })
+    .eq('id', params.id)
 
-  return Response.json({
-    users: usersRes.data || [],
-    businesses: businessesRes.data || [],
-    permissions: permissionsRes.data || []
-  })
+  if (error) {
+    return Response.json({ error: error.message }, { status: 500 })
+  }
+
+  return Response.json({ success: true })
 }

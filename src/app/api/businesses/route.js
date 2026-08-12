@@ -38,6 +38,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from('businesses')
       .select('*')
+      .eq('hidden', false)
       .order('title')
 
     if (error) {
@@ -47,7 +48,7 @@ export async function GET() {
   } else {
     // User widzi własne wizytówki (z jego konta Google) + te do których ma uprawnienia
     const [ownResult, permResult] = await Promise.all([
-      supabase.from('businesses').select('*').eq('user_id', userId),
+      supabase.from('businesses').select('*').eq('user_id', userId).eq('hidden', false),
       supabase.from('business_permissions').select('business_id').eq('user_id', userId)
     ])
 
@@ -56,7 +57,7 @@ export async function GET() {
 
     let permBusinesses = []
     if (permIds.length > 0) {
-      const { data } = await supabase.from('businesses').select('*').in('id', permIds)
+      const { data } = await supabase.from('businesses').select('*').in('id', permIds).eq('hidden', false)
       permBusinesses = data || []
     }
 

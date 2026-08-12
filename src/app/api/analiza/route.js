@@ -28,7 +28,7 @@ export async function GET(request) {
 
   let businesses
   if (user?.role === 'admin') {
-    const { data } = await supabase.from('businesses').select('*').order('title')
+    const { data } = await supabase.from('businesses').select('*').eq('hidden', false).order('title')
     businesses = data
   } else {
     const { data: permissions } = await supabase
@@ -39,7 +39,7 @@ export async function GET(request) {
     if (ids.length === 0) {
       return Response.json({ businesses: [], stats: {}, distribution: [], trend: [], ranking: [] })
     }
-    const { data } = await supabase.from('businesses').select('*').in('id', ids).order('title')
+    const { data } = await supabase.from('businesses').select('*').in('id', ids).eq('hidden', false).order('title')
     businesses = data
   }
 

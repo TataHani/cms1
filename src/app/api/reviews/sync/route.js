@@ -117,6 +117,7 @@ export async function GET() {
       .from('businesses')
       .select('*')
       .eq('google_connection_id', connection.id)
+      .eq('hidden', false)
 
     if (!businesses || businesses.length === 0) continue
 

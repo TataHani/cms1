@@ -26,16 +26,27 @@ export async function GET() {
     const { data: businesses } = await supabase
       .from('businesses')
       .select('id')
+      .eq('hidden', false)
     businessIds = businesses?.map(b => b.id) || []
   } else {
     const [ownResult, permResult] = await Promise.all([
-      supabase.from('businesses').select('id').eq('user_id', userId),
+      supabase.from('businesses').select('id').eq('user_id', userId).eq('hidden', false),
       supabase.from('business_permissions').select('business_id').eq('user_id', userId)
     ])
 
     const ownIds = (ownResult.data || []).map(b => b.id)
     const permIds = (permResult.data || []).map(p => p.business_id)
     businessIds = [...new Set([...ownIds, ...permIds])]
+  }
+
+  // Uprawnienia moga wskazywac na ukryta wizytowke - odfiltruj ja
+  if (businessIds.length > 0) {
+    const { data: visible } = await supabase
+      .from('businesses')
+      .select('id')
+      .in('id', businessIds)
+      .eq('hidden', false)
+    businessIds = (visible || []).map(b => b.id)
   }
 
   if (businessIds.length === 0) {

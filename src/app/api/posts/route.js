@@ -26,6 +26,7 @@ export async function GET() {
     const { data: businesses } = await supabase
       .from('businesses')
       .select('id')
+      .eq('hidden', false)
     businessIds = businesses?.map(b => b.id) || []
   } else {
     const { data: permissions } = await supabase

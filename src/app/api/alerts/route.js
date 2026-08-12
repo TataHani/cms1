@@ -23,9 +23,21 @@ export async function GET() {
   let alerts
 
   if (user?.role === 'admin') {
+    const { data: visible } = await supabase
+      .from('businesses')
+      .select('id')
+      .eq('hidden', false)
+
+    const visibleIds = visible?.map(b => b.id) || []
+
+    if (visibleIds.length === 0) {
+      return Response.json({ alerts: [] })
+    }
+
     const { data, error } = await supabase
       .from('alerts')
       .select('*')
+      .in('business_id', visibleIds)
       .order('created_at', { ascending: false })
       .limit(50000)
 
@@ -39,7 +51,17 @@ export async function GET() {
       .select('business_id')
       .eq('user_id', userId)
 
-    const businessIds = permissions?.map(p => p.business_id) || []
+    const permIds = permissions?.map(p => p.business_id) || []
+
+    let businessIds = []
+    if (permIds.length > 0) {
+      const { data: visible } = await supabase
+        .from('businesses')
+        .select('id')
+        .in('id', permIds)
+        .eq('hidden', false)
+      businessIds = visible?.map(b => b.id) || []
+    }
 
     if (businessIds.length === 0) {
       return Response.json({ alerts: [] })
@@ -78,7 +100,7 @@ export async function DELETE(request) {
   // Pobierz business IDs dostępne dla tego użytkownika (tak samo jak w GET)
   let businessIds
   if (user?.role === 'admin') {
-    const { data: businesses } = await supabase.from('businesses').select('id')
+    const { data: businesses } = await supabase.from('businesses').select('id').eq('hidden', false)
     businessIds = businesses?.map(b => b.id) || []
   } else {
     const { data: permissions } = await supabase

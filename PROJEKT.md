@@ -33,7 +33,8 @@ Status na dzień: **2026-08-12** (sekcja "Stan prac w toku" zaktualizowana 2026-
 Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działających maili.
 
 1. **Publikacja OAuth (Testing → Production)** - ZROBIONE 2026-07-02. Apka przełączona na "In production" w Google Auth Platform. To rozwiązuje główny problem: w trybie Testing Google wygaszał refresh_token co 7 dni (cotygodniowe zamrażanie wizytówek). W produkcji tokeny są trwałe. **Weryfikacja Google świadomie ODPUSZCZONA** - to narzędzie wewnętrzne dla kilku osób, limit 100 userów i ekran ostrzegawczy "Google nie zweryfikowało tej aplikacji" (do kliknięcia Zaawansowane → Przejdź do) nie przeszkadzają. Weryfikacja wymagałaby demo video + logo, zysk zerowy przy 3 userach.
-   - **WAŻNE - jednorazowy reconnect:** tokeny wydane w trybie Testing nadal wygasną po swoich 7 dniach. Trwały token Google wydaje dopiero przy autoryzacji zrobionej JUŻ w produkcji. Każdy user musi raz: Settings → Odłącz Google → Połącz Google. Dotyczy Marcina, kolegi Audi, koleżanki VW. Po tym koniec cotygodniowego zamrażania.
+   - **WAŻNE - jednorazowy reconnect:** tokeny wydane w trybie Testing nadal wygasną po swoich 7 dniach. Trwały token Google wydaje dopiero przy autoryzacji zrobionej JUŻ w produkcji. Dotyczy Marcina, kolegi Audi, koleżanki VW. Po tym koniec cotygodniowego zamrażania.
+   - **JAK ROBIĆ RECONNECT (poprawione 2026-08-12):** Settings → **"Polacz konto"** i wybrać TO SAMO konto Google. **NIE klikać "Odlacz".** Callback robi `upsert` z `onConflict: 'user_id,google_id'` (`api/auth/callback/google-connect/route.js:66`), więc tokeny nadpisują się w istniejącym wierszu, a wizytówki i opinie zostają nietknięte. Wcześniejsza wersja tej instrukcji ("Odłącz → Połącz") była DESTRUKCYJNA, patrz ostrzeżenie niżej.
    - **CZEGO publikacja NIE zmieniła (wyjaśnione 2026-08-12):** ekrany klikane przy podłączaniu konta ZOSTAJĄ i to jest poprawne zachowanie:
      - **Ekran z listą uprawnień** apka wymusza sama parametrem `prompt=consent` (`api/auth/connect-google/route.js:28`). Bez niego Google przy ponownej autoryzacji NIE wyda `refresh_token`, tylko godzinny access token, i synchronizacja umarłaby tego samego dnia. Ten ekran jest warunkiem działania, nie usterką.
      - **Ekran "Google nie zweryfikowało tej aplikacji"** (Zaawansowane → Przejdź do) zostaje, bo weryfikacja Google została świadomie odpuszczona.
@@ -65,6 +66,24 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
      - (b) Przetestować jakość propozycji AI w UI (przycisk "Zaproponuj AI").
      - (c) Zaktualizować stałą `CUTOFF` w `src/app/api/cron/auto-respond/route.js` na realny moment startu (inaczej pierwszy bieg crona zaleje stare opinie auto-odpowiedziami).
      - (d) Dodać zadanie crona `/api/cron/auto-respond` co 15 min z headerem `x-cron-secret` w cron-job.org → DOPIERO to uruchamia auto-publikację.
+
+## Usuwanie wizytówek z panelu admina (dodane 2026-08-12)
+
+Panel admina ma przy każdej wizytówce ikonę kosza. Kliknięcie **ukrywa** wizytówkę (`businesses.hidden = true`), NIE kasuje jej z bazy.
+
+**Dlaczego ukrycie, a nie DELETE:**
+1. Wszystkie FK do `businesses` mają `ON DELETE CASCADE` - twardy delete skasowałby opinie, alerty, uprawnienia, konkurencję i ustawienia alertów.
+2. Wizytówka usunięta z bazy **wróciłaby** przy następnym "Polacz konto", bo connect pobiera listę lokalizacji z Google od nowa. Flaga `hidden` przeżywa synchronizację, bo `upsert` w `business/connect` nie podaje tej kolumny, więc `ON CONFLICT DO UPDATE` jej nie nadpisuje.
+
+**Migracja:** `sql/add-hidden-to-businesses.sql` (bezpieczna, nic nie usuwa). **Trzeba ją odpalić przed deployem**, inaczej wszystkie zapytania filtrujące po `hidden` zwrócą błąd.
+
+**Endpoint:** `DELETE /api/admin/businesses/[id]` (tylko rola `admin`).
+
+**Gdzie filtrowane** (ukryta wizytówka znika z list i z synchronizacji): `api/admin/data`, `api/businesses` (3 zapytania), `api/reviews` (+ odfiltrowanie ukrytych z uprawnień), `api/analiza`, `api/alerts` (GET dla admina i usera oraz DELETE), `api/posts`, `api/competitors`, `api/cron/sync-reviews`, `api/reviews/sync`.
+
+**Przywrócenie:** `update businesses set hidden = false where id = 'ID';` (ID podaje okno potwierdzenia przy usuwaniu).
+
+**Świadomie NIE filtrowane:** `api/business/[id]` (wejście po bezpośrednim URL), `api/cron/auto-respond` (uśpiony), `api/debug-reviews` i `api/reviews/debug` (endpointy debug do usunięcia).
 
 ## Czym jest projekt
 
@@ -271,7 +290,17 @@ Dziś zpushowane commity:
 
 Przy salonach z 1700+ opiniami (VW Gdańsk, VW Toruń) dwumiesięczna cisza jest nierealna - to wygasłe refresh tokeny, nie brak opinii. Zgodne z mechanizmem opisanym w pkt 1 "Stan prac w toku": tokeny wydane w trybie Testing wygasają po 7 dniach, a jednorazowy reconnect po publikacji OAuth do produkcji NIE został wykonany dla kont VW i Ford.
 
-**Odmrożenie:** właściciel konta loguje się do cms1 -> /settings -> Odłącz Google -> Połącz Google. Dopiero autoryzacja zrobiona w trybie produkcyjnym daje trwały token. Adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
+**Odmrożenie:** właściciel konta loguje się do cms1 -> /settings -> **"Polacz konto"** i wybiera to samo konto Google (**bez klikania "Odlacz"**). Dopiero autoryzacja zrobiona w trybie produkcyjnym daje trwały token. Adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
+
+### NIEBEZPIECZNE: "Odlacz" kasuje opinie kaskadowo (odkryte 2026-08-12)
+
+`api/google-connections/[id]/route.js:18-21` przy odłączaniu konta robi **`delete` na tabeli `businesses`**, a nie odpięcie. Wszystkie klucze obce wskazujące na `businesses` mają **`ON DELETE CASCADE`** (zweryfikowane w `pg_constraint`): `reviews`, `alerts`, `competitors`, `ranking_notes`, `business_permissions`, `alert_settings`.
+
+Skutek jednego kliknięcia "Odlacz": znikają wizytówki tego połączenia **wraz z opiniami, alertami, uprawnieniami userów, konkurencją i ustawieniami alertów**. Dla konta VW to 7785 opinii, dla Forda 632. Ponowny sync odtworzy z Google same treści opinii, ale NIE odzyska: propozycji AI (`suggested_reply`), znaczników `is_auto_reply`, historii alertów, nadanych uprawnień ani ustawień alertów.
+
+Dodatkowo wynik tego `delete` nie jest sprawdzany (brak obsługi `error`), więc awaria przechodzi bez śladu. Komunikat `confirm` w `settings/page.js:32` ostrzega tylko o "wizytówkach", nie wspominając o opiniach i uprawnieniach.
+
+**Do naprawy (nie zrobione):** odłączanie powinno zerować `google_connection_id` albo oznaczać połączenie jako nieaktywne, zamiast kasować wizytówki. Do czasu naprawy: **nie używać przycisku "Odlacz"**, reconnect robić przez samo "Polacz konto".
 
 Potwierdzenie przyczyny (2026-08-12): `token_expires_at` połączenia obsługującego 10 wizytówek VW to **2026-06-08 22:35**, a najnowsza opinia VW w bazie ma datę **2026-06-08**. Zbieżność co do dnia. Analogicznie połączenie Forda: token 2026-06-02. Kolumna `refresh_token` jest niepusta we wszystkich połączeniach, ale to nie znaczy, że token jest ważny - Google unieważnił go po stronie serwera, cron dostaje `invalid_grant` i po cichu pomija połączenie. **Niepusty `refresh_token` NIE jest dowodem działającej synchronizacji.**
 
