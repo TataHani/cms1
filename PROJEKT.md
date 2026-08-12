@@ -235,16 +235,30 @@ Dziś zpushowane commity:
 
 **Supabase Settings:** `Max Rows` podniesiony z 1000 do **50000** (Settings -> API -> Max Rows). Bez tego `.limit(50000)` w kodzie i tak był capowany na max_rows projektu.
 
-## Stan synchronizacji per konto cms1 (2026-05-26)
+## Stan synchronizacji per marka (zweryfikowane 2026-08-12)
 
-| Konto cms1 | Połączenie Google | Wizytówki | Świeży sync |
-|---|---|---|---|
-| Marcin (login 1) | 1 | Ford Plichta Gdańsk | TAK (2 opinie) |
-| Marcin (login 2) | 1 | 1x Audi | TAK (1139 opinii) |
-| Koleżanka | 1 (token wygasł) | 11x VW | NIE (zamrożone na starym stanie) |
-| Kolega (audi) | 1 | wizytówki Audi | TAK od 2026-05-28 (inkrementalny sync) |
+**18 wizytówek w bazie** (w tym 1x "Testowa firma" bez opinii), łącznie 11771 opinii.
 
-**13+ wizytówek w bazie**. VW pozostanie zamrożone do momentu gdy koleżanka zrobi reconnect (login na jej konto cms1 -> /settings -> Odłącz/Połącz Google -> sync). Konkretne adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
+| Grupa | Wizytówek | Opinii | Najnowsza opinia | Stan |
+|---|---|---|---|---|
+| Audi | 6 | 3356 | 2026-08-11 | **DZIAŁA** |
+| Volkswagen | 10 | 7785 | 2026-06-08 | **ZAMROŻONE ~2 mies.** |
+| Ford Gdańsk | 1 | 632 | 2026-05-25 | **ZAMROŻONE ~2,5 mies.** |
+
+Przy salonach z 1700+ opiniami (VW Gdańsk, VW Toruń) dwumiesięczna cisza jest nierealna - to wygasłe refresh tokeny, nie brak opinii. Zgodne z mechanizmem opisanym w pkt 1 "Stan prac w toku": tokeny wydane w trybie Testing wygasają po 7 dniach, a jednorazowy reconnect po publikacji OAuth do produkcji NIE został wykonany dla kont VW i Ford.
+
+**Odmrożenie:** właściciel konta loguje się do cms1 -> /settings -> Odłącz Google -> Połącz Google. Dopiero autoryzacja zrobiona w trybie produkcyjnym daje trwały token. Adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
+
+### PUŁAPKA DIAGNOSTYCZNA: `businesses.last_synced_at` kłamie
+
+Pole `last_synced_at` jest ustawiane **wyłącznie** przy podpinaniu/odświeżaniu listy wizytówek (`api/business/connect/route.js:125` i `api/auth/callback/google-connect/route.js:110`). **Ani cron `sync-reviews`, ani `reviews/sync` go nie dotykają.** Oznacza "kiedy ostatnio pobrano listę wizytówek z Google", a NIE "kiedy ostatnio ściągnięto opinie".
+
+Do oceny czy synchronizacja opinii żyje używaj:
+```sql
+select b.title, max(r.create_time) as najnowsza_opinia, count(r.id) as opinii
+from businesses b left join reviews r on r.business_id = b.id
+group by b.id, b.title order by najnowsza_opinia desc nulls last;
+```
 
 ## Cron-job.org
 
