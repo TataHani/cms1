@@ -255,6 +255,16 @@ Potwierdzenie przyczyny (2026-08-12): `token_expires_at` połączenia obsługuj�
 
 Martwe połączenie do sprzątnięcia: jedno konto Google w `google_connections` ma **0 przypisanych wizytówek** (token z 2026-06-02). Do usunięcia przez /settings albo zostawienia, nie szkodzi.
 
+### Jak czytać `google_connections.token_expires_at`
+
+Kolumna dotyczy **access tokena, który żyje 1 godzinę**, a NIE refresh tokena (daty ważności refresh tokena nie ma nigdzie w bazie, Google jej nie zwraca). Cron przy każdym biegu sprawdza, czy access token wygasł (`api/cron/sync-reviews/route.js:76`) i jeśli tak, wymienia refresh token na nowy access token, zapisując `teraz + expires_in` (linia 97). Przy cronie co 5 minut data jest przesuwana kilkanaście razy dziennie.
+
+Jak interpretować:
+- **data w przyszłości lub max godzinę wstecz** = połączenie zdrowe, cron właśnie pracował
+- **data sprzed wielu dni** = refresh token martwy, Google odmawia wydania access tokena, cron robi `continue` i po cichu pomija połączenie
+
+**Czas w bazie jest w UTC**, zegar w Polsce to +2h latem (CEST). Data `08:25` w Supabase to `10:25` czasu polskiego. Przy ocenie świeżości trzeba to doliczyć, inaczej zdrowe połączenie wygląda na wygasłe.
+
 ### PUŁAPKA DIAGNOSTYCZNA: `businesses.last_synced_at` kłamie
 
 Pole `last_synced_at` jest ustawiane **wyłącznie** przy podpinaniu/odświeżaniu listy wizytówek (`api/business/connect/route.js:125` i `api/auth/callback/google-connect/route.js:110`). **Ani cron `sync-reviews`, ani `reviews/sync` go nie dotykają.** Oznacza "kiedy ostatnio pobrano listę wizytówek z Google", a NIE "kiedy ostatnio ściągnięto opinie".
