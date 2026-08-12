@@ -249,6 +249,12 @@ Przy salonach z 1700+ opiniami (VW Gdańsk, VW Toruń) dwumiesięczna cisza jest
 
 **Odmrożenie:** właściciel konta loguje się do cms1 -> /settings -> Odłącz Google -> Połącz Google. Dopiero autoryzacja zrobiona w trybie produkcyjnym daje trwały token. Adresy email użytkowników w tabeli `google_connections` w Supabase, nie tutaj.
 
+Potwierdzenie przyczyny (2026-08-12): `token_expires_at` połączenia obsługującego 10 wizytówek VW to **2026-06-08 22:35**, a najnowsza opinia VW w bazie ma datę **2026-06-08**. Zbieżność co do dnia. Analogicznie połączenie Forda: token 2026-06-02. Kolumna `refresh_token` jest niepusta we wszystkich połączeniach, ale to nie znaczy, że token jest ważny - Google unieważnił go po stronie serwera, cron dostaje `invalid_grant` i po cichu pomija połączenie. **Niepusty `refresh_token` NIE jest dowodem działającej synchronizacji.**
+
+**Lawina alertów przy odmrożeniu NIE grozi** (zweryfikowane w kodzie 2026-08-12): w `api/cron/sync-reviews/route.js:167` opinia dostaje `is_new` tylko gdy jej `createTime` jest młodszy niż 20 minut (`freshnessThreshold`). Zaległe opinie z okresu zamrożenia wpadną do bazy cicho, bez alertów in-app i bez maili. Wyjątek: `is_edited` (linia 168) nie ma progu świeżości, więc opinie zmienione w międzyczasie wygenerują alerty EDITED_REVIEW - ilość ograniczona, akceptowalne.
+
+Martwe połączenie do sprzątnięcia: jedno konto Google w `google_connections` ma **0 przypisanych wizytówek** (token z 2026-06-02). Do usunięcia przez /settings albo zostawienia, nie szkodzi.
+
 ### PUŁAPKA DIAGNOSTYCZNA: `businesses.last_synced_at` kłamie
 
 Pole `last_synced_at` jest ustawiane **wyłącznie** przy podpinaniu/odświeżaniu listy wizytówek (`api/business/connect/route.js:125` i `api/auth/callback/google-connect/route.js:110`). **Ani cron `sync-reviews`, ani `reviews/sync` go nie dotykają.** Oznacza "kiedy ostatnio pobrano listę wizytówek z Google", a NIE "kiedy ostatnio ściągnięto opinie".
