@@ -76,9 +76,25 @@ Wewnętrzna nazwa: **GMB Manager** (`package.json: "gmb-manager"`).
 
 ## Logowanie do apki (Marcin)
 
-- Hasło Marcina trzymane w menedżerze haseł (ustawione ręcznie przez podmianę SHA256 w tabeli `users` 2026-05-26)
-- Jeżeli kiedyś zgubione → reset przez SQL update w Supabase (PROJEKT.md NIE jest miejscem na hasło)
+- Hasło Marcina trzymane w menedżerze haseł (zresetowane 2026-08-12 przez token z bazy, patrz niżej)
 - Rola: zależy od kolumny `role` w tabeli `users` (`admin` lub `user`)
+
+### Odzyskanie dostępu gdy maile nie wychodzą (sprawdzone 2026-08-12)
+
+Formularz `/forgot-password` **zapisuje token resetu do bazy ZANIM spróbuje wysłać maila** (`api/auth/forgot-password/route.js:29`), a błąd wysyłki jest połykany i endpoint zawsze zwraca `success: true` (linie 48-52). Skutek uboczny: nawet przy martwym SMTP token istnieje i wystarczy odczytać go z bazy.
+
+1. Kliknąć wyślij na `/forgot-password` (komunikat o wysłaniu pojawi się niezależnie od stanu SMTP)
+2. W Supabase SQL Editor:
+```sql
+select email, reset_token_expires,
+       'https://cms1-rwp1.vercel.app/reset-password?token=' || reset_token as link
+from users where reset_token is not null order by reset_token_expires desc;
+```
+3. Wejść na wygenerowany `link` i ustawić hasło. Token ważny 1h, jednorazowy.
+
+Ta droga jest lepsza niż podmiana hashu SHA256 SQL-em, bo hasło nie trafia do historii zapytań Supabase.
+
+**BUG do naprawy:** `/forgot-password` powinien odróżniać "mail wysłany" od "wysyłka padła". Teraz użytkownik dostaje potwierdzenie mimo cichej awarii SMTP. Komunikat może zostać neutralny (żeby nie zdradzać czy email istnieje w bazie), ale błąd wysyłki powinien trafiać do logów jako wyraźna awaria, a nie `console.error` bez konsekwencji.
 
 ## Stack
 
