@@ -63,9 +63,14 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
    - **Kolumny w `reviews`:** `alert_sent_at`, `auto_replied_at`, `is_auto_reply`, `suggested_reply` (dodane).
    - **OTWARTE TODO przed włączeniem auto-publikacji:**
      - (a) ~~Dodać `ANTHROPIC_API_KEY` do Vercel env~~ - ZROBIONE 2026-06-03, klucz działa.
-     - (b) Przetestować jakość propozycji AI w UI (przycisk "Zaproponuj AI").
-     - (c) Zaktualizować stałą `CUTOFF` w `src/app/api/cron/auto-respond/route.js` na realny moment startu (inaczej pierwszy bieg crona zaleje stare opinie auto-odpowiedziami).
+     - (b) **Przetestować jakość propozycji AI w UI** (przycisk "Zaproponuj AI") - NADAL OTWARTE, zrobić przed krokiem (d).
+     - (c) ~~Zaktualizować stałą `CUTOFF`~~ - ZROBIONE 2026-08-12, ustawiona na `2026-08-12T00:00:00Z`.
      - (d) Dodać zadanie crona `/api/cron/auto-respond` co 15 min z headerem `x-cron-secret` w cron-job.org → DOPIERO to uruchamia auto-publikację.
+
+   - **ZABEZPIECZENIA auto-publikacji (dodane 2026-08-12):**
+     - `CUTOFF = 2026-08-12T00:00:00Z` - system nie tyka opinii starszych niż moment uruchomienia. Stara wartość (2026-06-03) oznaczałaby, że pierwszy bieg crona opublikuje w Google odpowiedzi na całą zaległą historię od czerwca. Po reimporcie VW to setki opinii. **Publikacja w Google jest nieodwracalna.**
+     - `MAX_PUBLISH_PER_RUN = 10` - limit publikacji na jeden bieg crona (przy limicie 1000 kandydatów w zapytaniu). Ogranicza skalę ewentualnej pomyłki. Cron co 15 min, więc normalny ruch (kilka opinii dziennie) i tak się mieści. Podnieść dopiero po okresie obserwacji.
+     - Alerty i propozycje AI generują się normalnie dla wszystkich kandydatów - limit dotyczy WYŁĄCZNIE publikacji do Google.
 
 ## Usuwanie wizytówek z panelu admina (dodane 2026-08-12)
 

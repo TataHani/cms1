@@ -10,8 +10,15 @@ const supabase = createClient(
 )
 
 // System dziala tylko na opiniach od tej daty (nie tyka historycznych).
-// Przy wdrozeniu produkcyjnym ustawic na realny moment startu.
-const CUTOFF = new Date('2026-06-03T00:00:00Z')
+// Ustawione na moment uruchomienia produkcyjnego (2026-08-12). Opinie starsze
+// sa ignorowane - inaczej pierwszy bieg zalalby Google odpowiedziami na cala
+// zalegla historie (po reimporcie VW to setki opinii z calego lata).
+const CUTOFF = new Date('2026-08-12T00:00:00Z')
+
+// Bezpiecznik: ile odpowiedzi maksymalnie opublikowac w jednym biegu crona.
+// Publikacja w Google jest nieodwracalna, wiec ograniczamy skale ewentualnej
+// pomylki. Cron chodzi co 15 min, wiec normalny ruch i tak sie zmiesci.
+const MAX_PUBLISH_PER_RUN = 10
 
 // Okna czasowe liczone od momentu wystawienia opinii (create_time).
 const ALERT_AT_H = 20        // 1-2*: ponaglenie do ludzi
@@ -194,7 +201,7 @@ export async function GET(request) {
 
     // Auto-publikacja: 1-2* po 23h, 3-5* po 22h
     const publishAt = isNegative ? NEG_PUBLISH_AT_H : POS_PUBLISH_AT_H
-    if (ageH >= publishAt) {
+    if (ageH >= publishAt && published < MAX_PUBLISH_PER_RUN) {
       const connection = connectionMap.get(business.google_connection_id)
       if (!connection) continue
 
