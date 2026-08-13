@@ -624,8 +624,9 @@ Poprawiona też treść maila z powiadomieniem: nie mówi już "czeka na odpowie
 
 **Status:** commit `a8ac5d1` wypchnięty na `main` 2026-08-13, Vercel wdraża automatycznie.
 
-**Do zrobienia:**
-- Odpowiedź do zespołu: `maile/2026-08-13-wizytowki-zmiana-okien.html` (przygotowana, czeka na wysłanie). Prostuje okna z porannego maila na 0h/15h.
+- ~~Odpowiedź do zespołu~~ - **WYSŁANA 2026-08-13**, treść: `maile/2026-08-13-wizytowki-zmiana-okien.html`. Prostuje okna z porannego maila na 0h/15h.
+
+**Do obserwacji:** czy przy najbliższej negatywnej opinii mail dociera w ciągu kwadransa (przy `ALERT_AT_H = 0` powinien wyjść przy pierwszym biegu crona po odczytaniu opinii). Drugi punkt: czy nocne i weekendowe powiadomienia nie zaczną irytować zespołu.
 
 ### Commity i pliki tej sesji
 
