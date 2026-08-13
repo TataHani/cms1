@@ -622,15 +622,20 @@ Poprawiona też treść maila z powiadomieniem: nie mówi już "czeka na odpowie
 
 **Pochodzenie zmiany:** to prośba zespołu w odpowiedzi na mail sprostowanie z 2026-08-13 (okna 2h/20h). Ludzie chcieli wiedzieć o negatywnej opinii od razu, nie po dwóch godzinach.
 
-**Status:** commit `a8ac5d1` wypchnięty na `main` 2026-08-13, Vercel wdraża automatycznie.
+**Status:** commit `a8ac5d1` wypchnięty na `main` 2026-08-13, Vercel wdrożył.
 
-- ~~Odpowiedź do zespołu~~ - **WYSŁANA 2026-08-13**, treść: `maile/2026-08-13-wizytowki-zmiana-okien.html`. Prostuje okna z porannego maila na 0h/15h.
+**Odpowiedź do zespołu:** ~~do wysłania~~ **WYSŁANA 2026-08-13**, treść: `maile/2026-08-13-wizytowki-zmiana-okien.html`. Prostuje okna z porannego maila na 0h/15h.
 
-**Do obserwacji:** czy przy najbliższej negatywnej opinii mail dociera w ciągu kwadransa (przy `ALERT_AT_H = 0` powinien wyjść przy pierwszym biegu crona po odczytaniu opinii). Drugi punkt: czy nocne i weekendowe powiadomienia nie zaczną irytować zespołu.
+**Do obserwacji:**
+- Czy przy najbliższej negatywnej opinii mail dociera w ciągu kwadransa (przy `ALERT_AT_H = 0` powinien wyjść przy pierwszym biegu crona po odczytaniu opinii).
+- Czy nocne i weekendowe powiadomienia nie zaczną irytować zespołu. Opinia z soboty 23:00 wyśle maila w sobotę 23:00. Gdyby wypłynęło: wstrzymywać wysyłkę poza godzinami pracy, publikację zostawić na 15h.
 
 ### Commity i pliki tej sesji
 
 ```
+6bb8ffb docs: mark team reply mail as sent
+5cfb6f8 docs: record team request origin and reply mail for 0h/15h windows
+a8ac5d1 feat: notify immediately on 1-2 star reviews, publish after 15h
 37362f9 docs: mark alert fixes as deployed and team notified
 510fb62 docs: note timezone fix in review panel
 f5dc153 fix: show review timestamps in Polish time instead of raw UTC
