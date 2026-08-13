@@ -603,3 +603,37 @@ Helper `src/lib/dates.js`: `parseDbDate` (dokleja `Z` gdy w wartości nie ma str
 - **Do obserwacji:** czy przy kolejnej negatywnej opinii mail dociera w ciągu kilku minut do wszystkich z dostępem. To pierwszy prawdziwy sprawdzian nowej logiki alertów.
 - Nie sprawdzono, czy `alert_settings` ma jakiekolwiek wiersze (zapytanie nie zostało wykonane). Po zmianie nie ma to już znaczenia dla alertów.
 - Ryzyko nowego okna publikacji: opinia wystawiona w piątek po południu dostanie automatyczną odpowiedź w sobotę. Przy 1-2★ publikowana jest bezpieczna formułka (przeprosiny + prośba o kontakt), bez polemiki.
+
+### Commity i pliki tej sesji
+
+```
+37362f9 docs: mark alert fixes as deployed and team notified
+510fb62 docs: note timezone fix in review panel
+f5dc153 fix: show review timestamps in Polish time instead of raw UTC
+8a97947 Merge branch 'fix/alerty-i-podpis'
+00f3540 fix: alert immediately on negative reviews and unify reply signature
+```
+
+Branch `fix/alerty-i-podpis` zmergowany do `main` i usunięty. Nowe pliki: `src/lib/recipients.js`, `src/lib/dates.js`.
+
+```sql
+-- czy alert o negatywnej opinii w ogole powstal (test nowej logiki)
+select a.alert_type, a.created_at, b.title
+from alerts a join businesses b on b.id = a.business_id
+where a.created_at > now() - interval '48 hours'
+order by a.created_at desc;
+
+-- negatywne opinie i co sie z nimi stalo (pamietaj: czasy w UTC, +2h)
+select b.title, r.star_rating, r.create_time, r.alert_sent_at,
+       r.auto_replied_at, r.has_reply
+from reviews r join businesses b on b.id = r.business_id
+where r.star_rating <= 2 and r.create_time > now() - interval '48 hours'
+order by r.create_time desc;
+```
+
+Build lokalny (bez `.env.local`) wymaga atrap zmiennych:
+```powershell
+$env:NEXT_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"; $env:SUPABASE_SERVICE_KEY="dummy"
+$env:GOOGLE_CLIENT_ID="dummy"; $env:GOOGLE_CLIENT_SECRET="dummy"; $env:GOOGLE_REDIRECT_URI="https://dummy.local/cb"
+npm run build
+```
