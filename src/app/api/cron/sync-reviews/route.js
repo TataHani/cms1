@@ -1,7 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from '../../../../lib/email'
+import { getRecipients } from '../../../../lib/recipients'
 
 export const maxDuration = 800
+
+// Alert o negatywnej opinii wysylamy, gdy opinia pojawia sie w bazie po raz
+// pierwszy. Prog wieku chroni przed zalaniem skrzynek przy imporcie historii
+// (np. po ponownym podpieciu konta Google), gdy w bazie nie ma jeszcze nic.
+const ALERT_MAX_AGE_DAYS = 7
+
+// Twardy limit maili na jeden bieg crona - bezpiecznik na wypadek reimportu.
+const MAX_ALERT_EMAILS_PER_RUN = 30
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -68,6 +77,7 @@ export async function GET(request) {
   }
 
   let totalNewReviews = 0
+  let alertEmailsSent = 0
 
   for (const connection of connections) {
     let accessToken = connection.access_token
@@ -114,12 +124,6 @@ export async function GET(request) {
 
     if (!businesses) continue
 
-    // Pobierz ustawienia alertów użytkownika
-    const { data: alertSettings } = await supabase
-      .from('alert_settings')
-      .select('*')
-      .eq('user_id', connection.user_id)
-
     for (const business of businesses) {
       try {
         // Pobierz istniejące opinie z DB zanim zaczniemy sync
@@ -157,8 +161,14 @@ export async function GET(request) {
           stopAtTime
         )
 
-        // Próg "świeżości" — opinia musi być młodsza niż 20 minut żeby uznać ją za nową
+        // Próg "świeżości" — opinia musi być młodsza niż 20 minut żeby oznaczyć ją
+        // jako nową w interfejsie (badge "nowa" przy opinii)
         const freshnessThreshold = new Date(Date.now() - 20 * 60 * 1000)
+
+        // Próg dla alertów — tu liczy się sam fakt, że opinii jeszcze nie było
+        // w bazie. Google potrafi udostępnić opinię w API z opóźnieniem, więc
+        // warunek 20 minut gubił alerty o negatywnych opiniach.
+        const alertAgeThreshold = new Date(Date.now() - ALERT_MAX_AGE_DAYS * 24 * 60 * 60 * 1000)
 
         for (const review of allReviews) {
           const existing = existingReviewMap.get(review.reviewId)
@@ -166,6 +176,7 @@ export async function GET(request) {
 
           // Opinia jest nowa tylko jeśli: nie ma jej w DB ORAZ została wystawiona niedawno
           const isNew = !existing && !!reviewDate && reviewDate > freshnessThreshold
+          const isFirstSeen = !existing && !!reviewDate && reviewDate > alertAgeThreshold
           const isEdited = !!existing && normalizeComment(existing.comment) !== normalizeComment(review.comment)
 
           const ratingMap = { 'ONE': 1, 'TWO': 2, 'THREE': 3, 'FOUR': 4, 'FIVE': 5 }
@@ -190,46 +201,46 @@ export async function GET(request) {
 
           const reviewDbId = savedReview?.id || existing?.id || null
 
-          if (isNew) {
-            totalNewReviews++
+          if (isNew) totalNewReviews++
 
-            // Powiadamiamy tylko o negatywnych opiniach (1-2 gwiazdki).
-            // Pozytywne nie generuja szumu - zajmie sie nimi auto-odpowiedz.
-            const isNegative = starRating === 1 || starRating === 2
+          // Powiadamiamy tylko o negatywnych opiniach (1-2 gwiazdki).
+          // Pozytywne nie generuja szumu - zajmie sie nimi auto-odpowiedz.
+          const isNegative = starRating === 1 || starRating === 2
 
-            if (isNegative) {
-              await supabase.from('alerts').insert({
-                user_id: connection.user_id,
-                business_id: business.id,
-                review_id: reviewDbId,
-                alert_type: 'NEGATIVE_REVIEW',
-                title: 'Negatywna opinia ' + starRating + '★',
-                message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
-                is_read: false
-              })
+          if (isFirstSeen && isNegative) {
+            await supabase.from('alerts').insert({
+              user_id: connection.user_id,
+              business_id: business.id,
+              review_id: reviewDbId,
+              alert_type: 'NEGATIVE_REVIEW',
+              title: 'Negatywna opinia ' + starRating + '★',
+              message: (review.reviewer?.displayName || 'Ktos') + ' wystawil opinie dla ' + business.title,
+              is_read: false
+            })
 
-              if (alertSettings && alertSettings.length > 0) {
-                for (const setting of alertSettings) {
-                  const matchesBusiness = !setting.business_id || setting.business_id === business.id
+            // Mail do wszystkich osob z dostepem do wizytowki, nie tylko do
+            // wlasciciela polaczenia Google.
+            const recipients = alertEmailsSent < MAX_ALERT_EMAILS_PER_RUN
+              ? await getRecipients(business)
+              : []
 
-                  if (matchesBusiness && setting.email_address) {
-                    try {
-                      await sendEmail(
-                        setting.email_address,
-                        'Negatywna opinia ' + starRating + '★ - ' + business.title,
-                        `
-                          <h2>Negatywna opinia dla ${business.title}</h2>
-                          <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
-                          <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
-                          <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
-                          <p><a href="https://wizytowki.plichta.com.pl/reviews">Zobacz w aplikacji</a></p>
-                        `
-                      )
-                    } catch (e) {
-                      console.error('Blad wysylki maila alertu:', e)
-                    }
-                  }
-                }
+            for (const email of recipients) {
+              try {
+                await sendEmail(
+                  email,
+                  'Negatywna opinia ' + starRating + '★ - ' + business.title,
+                  `
+                    <h2>Negatywna opinia dla ${business.title}</h2>
+                    <p><strong>Ocena:</strong> ${'★'.repeat(starRating)}${'☆'.repeat(5-starRating)}</p>
+                    <p><strong>Autor:</strong> ${review.reviewer?.displayName || 'Anonim'}</p>
+                    <p><strong>Treść:</strong> ${review.comment || '(brak treści)'}</p>
+                    <p>Jeśli nikt nie odpowie, system opublikuje odpowiedź automatycznie po 20 godzinach od wystawienia opinii.</p>
+                    <p><a href="https://wizytowki.plichta.com.pl/reviews">Odpowiedz w aplikacji</a></p>
+                  `
+                )
+                alertEmailsSent++
+              } catch (e) {
+                console.error('Blad wysylki maila alertu:', e)
               }
             }
           }
@@ -277,6 +288,7 @@ export async function GET(request) {
   return Response.json({
     success: true,
     newReviews: totalNewReviews,
+    alertEmailsSent,
     timestamp: new Date().toISOString()
   })
 }

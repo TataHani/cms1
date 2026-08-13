@@ -82,7 +82,7 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
    - **Kto dostaje ponaglenie 1-2★ po 20h** (`getRecipients` w `api/cron/auto-respond/route.js:91`): właściciel wizytówki (`businesses.user_id`) + wszyscy z wpisem w `business_permissions` dla tej wizytówki + **wszyscy użytkownicy z rolą `admin`**. Zachowanie potwierdzone jako pożądane 2026-08-12 (Marcin jest jedynym adminem, więc "admini" = "Marcin").
      - **UWAGA na przyszłość:** nadanie komuś roli `admin` automatycznie zapisuje go na ponaglenia ze WSZYSTKICH wizytówek, także tych, z którymi nie ma nic wspólnego. Gdy pojawi się drugi admin, przełączyć na osobną zmienną env z adresem stałego odbiorcy zamiast odpytywania roli.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
-   - **Reguły auto-publikacji:** 1-2★ → alert do osób z dostępem po 20h, auto-publikacja bezpiecznej formułki po 23h. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
+   - **Reguły auto-publikacji (zmienione 2026-08-13):** 1-2★ → ponaglenie do osób z dostępem po **2h**, auto-publikacja bezpiecznej formułki po **20h**. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`). Stare wartości (20h/23h) oznaczały, że przez pierwszą dobę nikt nie dostawał żadnego sygnału o negatywnej opinii.
    - **AI:** Claude **Sonnet 4.6** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki. Klucz `ANTHROPIC_API_KEY` dodany do Vercel 2026-06-03, działa. (Początkowo Haiku 4.5, podbity na Sonnet 2026-06-03 bo Haiku robił błędy polskiej odmiany. Prompt pisany poprawną polszczyzną z ogonkami + instrukcja formy grzecznościowej.)
    - **Język opinii:** Google sklejają oryginał + tłumaczenie w jednym polu `comment`. Parser `src/lib/reviewText.js` (`parseReviewComment`) rozdziela je (obsługuje format z `(Translated by Google)` i z `(Original)`). AI dostaje sam oryginał i odpowiada w jego języku, z zakazem znaku „–". UI pokazuje oryginał + tłumaczenie szarym drukiem pod spodem.
    - **Forma grzecznościowa:** model dostaje imię autora opinii (`reviewer_name`) i dobiera formę wg płci wynikającej z imienia (Pana/Pani z odmianą); gdy imię niejednoznaczne/zagraniczne/"Anonim", pisze neutralnie bez "Pan/Pani". Endpoint `suggest` pobiera `reviewer_name` w select.
@@ -547,5 +547,50 @@ where u.email = 'ADRES' and b.title ilike '%volkswagen%' and b.hidden = false;
 ```
 
 - Build lokalny wymaga atrap zmiennych (brak `.env.local`): `$env:NEXT_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"` itd., inaczej pada na "Collecting page data".
-- Okna czasowe auto-odpowiedzi: `ALERT_AT_H = 20`, `NEG_PUBLISH_AT_H = 23`, `POS_PUBLISH_AT_H = 22` w `api/cron/auto-respond/route.js`.
+- Okna czasowe auto-odpowiedzi (od 2026-08-13): `ALERT_AT_H = 2`, `NEG_PUBLISH_AT_H = 20`, `POS_PUBLISH_AT_H = 22` w `api/cron/auto-respond/route.js`.
 - Awaryjny stop auto-publikacji: wyłączyć zadanie `auto-respond` w cron-job.org.
+
+---
+
+## Sesja 2026-08-13
+
+### Zgłoszenie
+
+Użytkownik od Audi: "opinia 1★ i automat nie odpowiedział w ciągu 3 godzin, maila z ostrzeżeniem też nie dostałem".
+
+### Diagnoza (automat NIE zawiódł)
+
+Opinia 1★ Audi Gdańsk Stadion, `create_time` 2026-08-12 13:08 UTC = **15:08 czasu polskiego**. O godzinie zgłoszenia miała 19h 55min. Przy ówczesnych progach (alert 20h, publikacja 23h) nic nie było spóźnione. Opinia dostała w międzyczasie ręczną odpowiedź (`has_reply = true`, `auto_replied_at = null`), więc cron słusznie ją pominął (filtruje `has_reply = false`).
+
+Zawiodła **sygnalizacja** i **obietnica z maila do zespołu z 2026-08-12**, który mówił "dostajecie maila z ostrzeżeniem, macie wtedy około 3 godzin", nie wspominając, że pierwsze 20h system milczy.
+
+### PUŁAPKA DIAGNOSTYCZNA: czasy w bazie są w UTC (potwierdzone 2026-08-13)
+
+`select now()` w Supabase SQL Editor pokazało 09:03 przy 11:03 czasu polskiego. Sesja bazy działa w UTC, kolumna `reviews.create_time` nie ma strefy, a `sync-reviews:185` zapisuje surową wartość z Google API (RFC3339 w UTC, bez konwersji). **Do każdej daty z bazy doliczać +2h latem (CEST), +1h zimą.** Dotyczy `create_time`, `alert_sent_at`, `auto_replied_at`, `token_expires_at`.
+
+### Znalezione wady konstrukcyjne alertu natychmiastowego
+
+1. Mail o negatywnej opinii z `sync-reviews` szedł tylko na adresy z `alert_settings` i tylko właściciela połączenia Google. Osoby z dostępem przez `business_permissions` nie dostawały go nigdy. Dodatkowo tabela `alert_settings` została skasowana kaskadą 2026-08-12.
+2. Warunek `is_new` wymagał, żeby opinia była młodsza niż 20 minut w momencie syncu. Gdy Google udostępniło ją w API później, alert nie powstawał w ogóle.
+
+### Naprawione (branch `fix/alerty-i-podpis`, NIE wdrożone na produkcję)
+
+| Zmiana | Plik |
+|---|---|
+| `ALERT_AT_H` 20 → 2, `NEG_PUBLISH_AT_H` 23 → 20 | `api/cron/auto-respond/route.js` |
+| Treść ponaglenia liczy okno dynamicznie (`NEG_PUBLISH_AT_H - ALERT_AT_H`) zamiast sztywnego "3h" | `api/cron/auto-respond/route.js` |
+| Alert 1-2★ wysyłany do `getRecipients` (właściciel + uprawnieni + admini) zamiast do `alert_settings` | `api/cron/sync-reviews/route.js` |
+| Alert oparty na `isFirstSeen` (opinii nie było w bazie) zamiast progu 20 minut; bezpiecznik `ALERT_MAX_AGE_DAYS = 7` i `MAX_ALERT_EMAILS_PER_RUN = 30` | `api/cron/sync-reviews/route.js` |
+| `getRecipients` wyniesione do wspólnego helpera (używane przez oba crony) | `src/lib/recipients.js` (nowy) |
+| Podpis każdej odpowiedzi: "Z wyrazami szacunku," / "Zespół <marka>" | `src/lib/ai.js` + formułka awaryjna w `auto-respond` |
+
+**Marka w podpisie:** `brandName()` w `src/lib/ai.js` mapuje nazwę wizytówki na markę (`Audi`, `Volkswagen` także z "VW", `Ford`), fallback na pełną nazwę wizytówki. Podpis brzmi "Zespół Audi", nie "Zespół Audi Gdańsk Stadion".
+
+**Skutek uboczny do świadomej akceptacji:** strona `/alert-settings` nie ma już wpływu na maile o negatywnych opiniach. Wyłączenie alertów per wizytówka przestało działać, bo to właśnie ta zależność spowodowała ciszę. Jeśli kiedyś ktoś będzie chciał wypisać się z maili, trzeba dodać to jawnie w `getRecipients`.
+
+### Otwarte
+
+- **Deploy na produkcję** (merge `fix/alerty-i-podpis` → `main`). Build lokalny przechodzi czysto (37 tras).
+- **Mail sprostowanie do zespołu** - poprzedni obiecywał sygnał w 3h, nowa konfiguracja daje ponaglenie po 2h i publikację po 20h.
+- Nie sprawdzono, czy `alert_settings` ma jakiekolwiek wiersze (zapytanie nie zostało wykonane). Po zmianie nie ma to już znaczenia dla alertów.
+- Ryzyko nowego okna publikacji: opinia wystawiona w piątek po południu dostanie automatyczną odpowiedź w sobotę. Przy 1-2★ publikowana jest bezpieczna formułka (przeprosiny + prośba o kontakt), bez polemiki.
