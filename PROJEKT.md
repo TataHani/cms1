@@ -573,7 +573,7 @@ Zawiodła **sygnalizacja** i **obietnica z maila do zespołu z 2026-08-12**, kt�
 1. Mail o negatywnej opinii z `sync-reviews` szedł tylko na adresy z `alert_settings` i tylko właściciela połączenia Google. Osoby z dostępem przez `business_permissions` nie dostawały go nigdy. Dodatkowo tabela `alert_settings` została skasowana kaskadą 2026-08-12.
 2. Warunek `is_new` wymagał, żeby opinia była młodsza niż 20 minut w momencie syncu. Gdy Google udostępniło ją w API później, alert nie powstawał w ogóle.
 
-### Naprawione (branch `fix/alerty-i-podpis`, NIE wdrożone na produkcję)
+### Naprawione i WDROŻONE na produkcję 2026-08-13 (`8a97947`, `f5dc153`)
 
 | Zmiana | Plik |
 |---|---|
@@ -598,7 +598,8 @@ Helper `src/lib/dates.js`: `parseDbDate` (dokleja `Z` gdy w wartości nie ma str
 
 ### Otwarte
 
-- **Deploy na produkcję** (merge `fix/alerty-i-podpis` → `main`). Build lokalny przechodzi czysto (37 tras).
-- **Mail sprostowanie do zespołu** - poprzedni obiecywał sygnał w 3h, nowa konfiguracja daje ponaglenie po 2h i publikację po 20h.
+- ~~Deploy na produkcję~~ - ZROBIONE 2026-08-13, `main` wypchnięty, Vercel wdrożył.
+- ~~Mail sprostowanie do zespołu~~ - **WYSŁANY 2026-08-13**, treść: `maile/2026-08-13-wizytowki-sprostowanie.html`. Mówi o dwóch błędach (alert do jednej osoby + próg 20 min, godziny w UTC), o tym że sam automat zadziałał prawidłowo, i podaje nowe okna 2h/20h.
+- **Do obserwacji:** czy przy kolejnej negatywnej opinii mail dociera w ciągu kilku minut do wszystkich z dostępem. To pierwszy prawdziwy sprawdzian nowej logiki alertów.
 - Nie sprawdzono, czy `alert_settings` ma jakiekolwiek wiersze (zapytanie nie zostało wykonane). Po zmianie nie ma to już znaczenia dla alertów.
 - Ryzyko nowego okna publikacji: opinia wystawiona w piątek po południu dostanie automatyczną odpowiedź w sobotę. Przy 1-2★ publikowana jest bezpieczna formułka (przeprosiny + prośba o kontakt), bez polemiki.
