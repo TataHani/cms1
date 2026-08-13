@@ -620,9 +620,12 @@ Helper `src/lib/dates.js`: `parseDbDate` (dokleja `Z` gdy w wartości nie ma str
 
 Poprawiona też treść maila z powiadomieniem: nie mówi już "czeka na odpowiedz juz Xh" (przy progu 0h wychodziło "0h"), tylko "Nowa opinia X★ czeka na odpowiedz" i deklaruje 15h okno liczone od wystawienia opinii.
 
+**Pochodzenie zmiany:** to prośba zespołu w odpowiedzi na mail sprostowanie z 2026-08-13 (okna 2h/20h). Ludzie chcieli wiedzieć o negatywnej opinii od razu, nie po dwóch godzinach.
+
+**Status:** commit `a8ac5d1` wypchnięty na `main` 2026-08-13, Vercel wdraża automatycznie.
+
 **Do zrobienia:**
-- Deploy na produkcję (bez tego cron dalej chodzi na 2h/20h/22h).
-- **Zespół dostał 2026-08-13 mail sprostowanie mówiący o oknach 2h/20h.** Ta informacja jest już nieaktualna. Zdecydować, czy wysyłać kolejną korektę, czy odczekać i podać nowe zasady przy najbliższej okazji.
+- Odpowiedź do zespołu: `maile/2026-08-13-wizytowki-zmiana-okien.html` (przygotowana, czeka na wysłanie). Prostuje okna z porannego maila na 0h/15h.
 
 ### Commity i pliki tej sesji
 
