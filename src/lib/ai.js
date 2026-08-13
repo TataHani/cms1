@@ -3,7 +3,29 @@ import { parseReviewComment } from './reviewText'
 
 const MODEL = 'claude-sonnet-4-6'
 
+// Podpis ma zawierac sama marke, a nie pelna nazwe wizytowki
+// ("Zespol Audi", nie "Zespol Audi Gdansk Stadion").
+const BRANDS = [
+  [/volkswagen|\bvw\b/i, 'Volkswagen'],
+  [/audi/i, 'Audi'],
+  [/ford/i, 'Ford'],
+]
+
+export function brandName(title) {
+  const match = BRANDS.find(([pattern]) => pattern.test(title || ''))
+  return match ? match[1] : (title || 'Plichta')
+}
+
+// Kazda odpowiedz konczy sie tym samym podpisem, w dwoch liniach.
+function signatureRule(brand) {
+  return `Zakończ odpowiedź dokładnie takim podpisem, w dwóch osobnych liniach:
+Z wyrazami szacunku,
+Zespół ${brand}
+Nie dopisuj nic po podpisie. Gdy odpowiadasz w innym języku niż polski, przetłumacz zwrot grzecznościowy i słowo "Zespół" na ten język, ale nazwę "${brand}" zostaw bez zmian.`
+}
+
 function buildPrompt(review, business) {
+  const brand = brandName(business.title)
   // Google sklejaja oryginal z tlumaczeniem - bierzemy sam oryginal,
   // zeby model odpowiedzial w jezyku klienta, a nie mieszal jezykow.
   const { original } = parseReviewComment(review.comment)
@@ -17,7 +39,8 @@ function buildPrompt(review, business) {
 Oryginalna treść opinii: "${original || '(brak treści, sama ocena)'}"
 ${author}
 Odpowiedz w tym samym języku, w którym napisana jest opinia.
-Zasady: przeproś za nieprzyjemne doświadczenie, okaż empatię, zaproponuj kontakt w celu wyjaśnienia sprawy. Nie przyznawaj się do konkretnych win, nie wdawaj się w polemikę, nie obiecuj rekompensaty.${contact} Ton uprzejmy i profesjonalny. Zakończ podpisem "Zespół ${business.title}".`
+Zasady: przeproś za nieprzyjemne doświadczenie, okaż empatię, zaproponuj kontakt w celu wyjaśnienia sprawy. Nie przyznawaj się do konkretnych win, nie wdawaj się w polemikę, nie obiecuj rekompensaty.${contact} Ton uprzejmy i profesjonalny.
+${signatureRule(brand)}`
   }
 
   if (hasText) {
@@ -25,12 +48,13 @@ Zasady: przeproś za nieprzyjemne doświadczenie, okaż empatię, zaproponuj kon
 Oryginalna treść opinii: "${original}"
 ${author}
 Odpowiedz w tym samym języku, w którym napisana jest opinia.
-Ton serdeczny i profesjonalny, bez przesady. Zakończ podpisem "Zespół ${business.title}".`
+Ton serdeczny i profesjonalny, bez przesady.
+${signatureRule(brand)}`
   }
 
   return `Napisz bardzo krótkie (1 zdanie) uprzejme podziękowanie za ocenę ${review.star_rating}/5 wystawioną firmie "${business.title}" (klient nie dodał treści).
 ${author}
-Zakończ podpisem "Zespół ${business.title}".`
+${signatureRule(brand)}`
 }
 
 export async function generateReply(review, business) {

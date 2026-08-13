@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { sendEmail } from '../../../../lib/email'
-import { generateReply } from '../../../../lib/ai'
+import { generateReply, brandName } from '../../../../lib/ai'
+import { getRecipients } from '../../../../lib/recipients'
 
 export const maxDuration = 300
 
@@ -21,8 +22,10 @@ const CUTOFF = new Date('2026-08-12T00:00:00Z')
 const MAX_PUBLISH_PER_RUN = 10
 
 // Okna czasowe liczone od momentu wystawienia opinii (create_time).
-const ALERT_AT_H = 20        // 1-2*: ponaglenie do ludzi
-const NEG_PUBLISH_AT_H = 23  // 1-2*: auto-publikacja jesli nadal cisza
+// Ponaglenie idzie szybko, zeby czlowiek mial realna szanse odpowiedziec
+// pierwszy; automat wchodzi dopiero pod koniec doby, gdy nikt nie zareagowal.
+const ALERT_AT_H = 2         // 1-2*: ponaglenie do ludzi
+const NEG_PUBLISH_AT_H = 20  // 1-2*: auto-publikacja jesli nadal cisza
 const POS_PUBLISH_AT_H = 22  // 3-5*: auto-publikacja po cichu
 
 const APP_URL = 'https://wizytowki.plichta.com.pl'
@@ -31,17 +34,18 @@ const APP_URL = 'https://wizytowki.plichta.com.pl'
 function buildSuggestion(review, business) {
   const isNegative = review.star_rating === 1 || review.star_rating === 2
   const hasText = review.comment && review.comment.trim().length > 0
+  const signature = `\n\nZ wyrazami szacunku,\nZespół ${brandName(business.title)}`
 
   if (isNegative) {
     const contact = business.phone ? ` pod numerem ${business.phone}` : ''
-    return `Dziękujemy za opinię i bardzo nam przykro, że Państwa doświadczenie nie spełniło oczekiwań. Zależy nam na wyjaśnieniu sprawy, dlatego prosimy o kontakt${contact}. Pozdrawiamy, zespół ${business.title}.`
+    return `Dziękujemy za opinię i bardzo nam przykro, że Państwa doświadczenie nie spełniło oczekiwań. Zależy nam na wyjaśnieniu sprawy, dlatego prosimy o kontakt${contact}.${signature}`
   }
 
   if (hasText) {
-    return `Bardzo dziękujemy za pozytywną opinię i okazane zaufanie. Cieszymy się, że możemy Państwu pomagać. Pozdrawiamy, zespół ${business.title}.`
+    return `Bardzo dziękujemy za pozytywną opinię i okazane zaufanie. Cieszymy się, że możemy Państwu pomagać.${signature}`
   }
 
-  return `Dziękujemy za ocenę i zaufanie. Pozdrawiamy, zespół ${business.title}.`
+  return `Dziękujemy za ocenę i zaufanie.${signature}`
 }
 
 // Zwraca wazny access_token dla polaczenia, odswiezajac go w razie potrzeby.
@@ -92,29 +96,6 @@ async function publishReply(business, accessToken, googleReviewId, comment) {
   })
 
   return response.ok
-}
-
-// Emaile osob z dostepem do wizytowki: wlasciciel + uprawnieni + admini.
-async function getRecipients(business) {
-  const emails = new Set()
-
-  const { data: owner } = await supabase
-    .from('users').select('email').eq('id', business.user_id).single()
-  if (owner?.email) emails.add(owner.email)
-
-  const { data: perms } = await supabase
-    .from('business_permissions').select('user_id').eq('business_id', business.id)
-  if (perms && perms.length > 0) {
-    const { data: permUsers } = await supabase
-      .from('users').select('email').in('id', perms.map(p => p.user_id))
-    permUsers?.forEach(u => u.email && emails.add(u.email))
-  }
-
-  const { data: admins } = await supabase
-    .from('users').select('email').eq('role', 'admin')
-  admins?.forEach(a => a.email && emails.add(a.email))
-
-  return [...emails]
 }
 
 export async function GET(request) {
@@ -186,7 +167,7 @@ export async function GET(request) {
               <h2>Negatywna opinia bez odpowiedzi</h2>
               <p>Opinia ${review.star_rating}★ dla <strong>${business.title}</strong> czeka na odpowiedz juz ${Math.floor(ageH)}h.</p>
               <p><strong>Tresc:</strong> ${review.comment || '(brak tresci)'}</p>
-              <p>Jesli nikt nie odpowie w ciagu ok. 3h, system opublikuje odpowiedz automatycznie.</p>
+              <p>Jesli nikt nie odpowie w ciagu ok. ${NEG_PUBLISH_AT_H - ALERT_AT_H}h, system opublikuje odpowiedz automatycznie.</p>
               <p><a href="${APP_URL}/reviews">Odpowiedz teraz w aplikacji</a></p>
             `
           )
