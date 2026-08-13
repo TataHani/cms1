@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Building2, Star, MessageSquare, Bell, ArrowLeft, Reply, CheckCircle, Send, X, Sparkles } from 'lucide-react'
 import NavBar from '../components/NavBar'
 import { parseReviewComment } from '../../lib/reviewText'
+import { parseDbDate, formatDateTime } from '../../lib/dates'
 
 export default function ReviewsPage() {
   const [reviews, setReviews] = useState([])
@@ -110,11 +111,12 @@ export default function ReviewsPage() {
 
   // Cutoff dla "bez odpowiedzi" - historyczne opinie sprzed maja 2026 ignorujemy
   const UNANSWERED_CUTOFF = new Date('2026-05-01')
-  const isUnansweredRelevant = (r) => !r.has_reply && new Date(r.create_time) >= UNANSWERED_CUTOFF
+  const isUnansweredRelevant = (r) => !r.has_reply && parseDbDate(r.create_time) >= UNANSWERED_CUTOFF
 
   const dateInRange = (r) => {
     if (quickRange === 'all') return true
-    const t = new Date(r.create_time).getTime()
+    const t = parseDbDate(r.create_time)?.getTime()
+    if (!t) return false
     const now = new Date()
     if (quickRange === 'today') {
       return t >= new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
@@ -133,7 +135,7 @@ export default function ReviewsPage() {
     .filter(r => selectedBusiness === 'all' || r.business_id === selectedBusiness)
     .filter(r => !onlyUnanswered || isUnansweredRelevant(r))
     .filter(dateInRange)
-    .sort((a, b) => new Date(b.create_time) - new Date(a.create_time))
+    .sort((a, b) => parseDbDate(b.create_time) - parseDbDate(a.create_time))
 
   const totalPages = Math.max(1, Math.ceil(filteredReviews.length / PAGE_SIZE))
   const pagedReviews = filteredReviews.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
@@ -265,7 +267,7 @@ export default function ReviewsPage() {
                   </div>
                 </div>
                 <span className="text-sm text-slate-400">
-                  {new Date(review.create_time).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
+                  {formatDateTime(review.create_time)}
                 </span>
               </div>
 
@@ -288,7 +290,7 @@ export default function ReviewsPage() {
                     </div>
                     {review.reply_update_time && (
                       <span className="text-xs text-slate-400">
-                        {new Date(review.reply_update_time).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
+                        {formatDateTime(review.reply_update_time)}
                       </span>
                     )}
                   </div>

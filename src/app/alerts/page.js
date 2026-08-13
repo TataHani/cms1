@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { Bell, ArrowLeft, Star, AlertCircle, CheckCircle, Trash2 } from 'lucide-react'
+import { formatDateTime } from '../../lib/dates'
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState([])
@@ -128,7 +129,7 @@ export default function AlertsPage() {
                         </a>
                       )}
                       <p className="text-xs text-slate-400 mt-1">
-                        {new Date(alert.created_at).toLocaleString('pl-PL')}
+                        {formatDateTime(alert.created_at)}
                       </p>
                     </div>
                     <div className="flex items-center gap-1">
