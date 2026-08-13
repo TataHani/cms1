@@ -61,7 +61,7 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
      - Publikacja zmieniła **wyłącznie trwałość refresh tokena** (7 dni → długoterminowy). Sprawdzianem sukcesu nie jest brak ekranów, tylko to, czy po tygodniu synchronizacja nadal działa.
 2. **Subdomena `wizytowki.plichta.com.pl`** - **DZIAŁA WSZĘDZIE, to podstawowy adres aplikacji** (zweryfikowane 2026-08-12). CNAME → `06112434f9a48ae4.vercel-dns-017.com` → 216.150.1.129 / 216.150.16.129. TXT `google-site-verification` na subdomenie ostatecznie NIEPOTRZEBNY - domena root `plichta.com.pl` jest już zweryfikowana w Search Console na koncie Marcina.
    - **SPLIT-HORIZON DNS ROZWIĄZANY:** problem z 2026-07-02 (wewnętrzna strefa `plichta.com.pl` na AD `pladsrv01`, 192.168.40.10/11, bez rekordu `wizytowki` → NXDOMAIN z sieci firmowej) już nie występuje. IT dodało rekord: firmowe serwery DNS rozwiązują subdomenę poprawnie, `/login` zwraca 200 z sieci firmowej.
-   - **W komunikacji z użytkownikami używać `wizytowki.plichta.com.pl`**, nie adresu `cms1-rwp1.vercel.app`. Linki w mailach wysyłanych przez system (alert o negatywnej opinii z `sync-reviews`, ponaglenie 20h z `auto-respond`) przestawione na tę domenę 2026-08-12.
+   - **W komunikacji z użytkownikami używać `wizytowki.plichta.com.pl`**, nie adresu `cms1-rwp1.vercel.app`. Linki w mailach wysyłanych przez system (alert o negatywnej opinii z `sync-reviews`, powiadomienie o negatywnej opinii z `auto-respond`) przestawione na tę domenę 2026-08-12.
    - **UWAGA:** adres `cms1-rwp1.vercel.app` nadal działa i **musi zostać** w `GOOGLE_REDIRECT_URI` - jest wpisany w Google Cloud Console jako authorized redirect URI. Zmiana wymagałaby edycji konfiguracji OAuth po stronie Google, więc logowanie przez Google celowo zostaje na adresie Vercela.
 3. **Strona `/privacy`** (`src/app/privacy/page.js`) wdrożona na produkcję (main) - wymóg weryfikacji Google. Dane Plichta + IOD inspektor@plichta.com.pl.
 4. **Reset hasła** - ZROBIONE i wdrożone na produkcję 2026-06-03. Strony `/forgot-password` + `/reset-password`, endpointy, kolumny `reset_token` + `reset_token_expires` w `users`, mail przez SMTP. Przetestowane end-to-end (mail dochodzi, zmiana hasła działa). Token ważny 1h, jednorazowy.
@@ -79,10 +79,12 @@ Cel nadrzędny: doprowadzić apkę do produkcyjnej weryfikacji OAuth i działaj�
 
 8. **System auto-odpowiedzi na opinie** - **AKTYWNY od 2026-08-12**. Cron `auto-respond` dodany w cron-job.org (co 15 min), auto-publikacja do Google działa. Jakość propozycji AI zweryfikowana ręcznie na kilkunastu opiniach przed włączeniem (polska odmiana, forma grzecznościowa, brak polemiki przy negatywnych - wszystko OK). Kod wdrożony na produkcję 2026-06-03, uśpiony do 2026-08-12.
    - **Wyłączenie awaryjne:** wyłączyć zadanie `auto-respond` w cron-job.org. Publikacja staje natychmiast. Odpowiedzi już opublikowanych w Google to NIE cofa.
-   - **Kto dostaje ponaglenie 1-2★ po 20h** (`getRecipients` w `api/cron/auto-respond/route.js:91`): właściciel wizytówki (`businesses.user_id`) + wszyscy z wpisem w `business_permissions` dla tej wizytówki + **wszyscy użytkownicy z rolą `admin`**. Zachowanie potwierdzone jako pożądane 2026-08-12 (Marcin jest jedynym adminem, więc "admini" = "Marcin").
+   - **Kto dostaje powiadomienie 1-2★** (`getRecipients` w `api/cron/auto-respond/route.js:91`): właściciel wizytówki (`businesses.user_id`) + wszyscy z wpisem w `business_permissions` dla tej wizytówki + **wszyscy użytkownicy z rolą `admin`**. Zachowanie potwierdzone jako pożądane 2026-08-12 (Marcin jest jedynym adminem, więc "admini" = "Marcin").
      - **UWAGA na przyszłość:** nadanie komuś roli `admin` automatycznie zapisuje go na ponaglenia ze WSZYSTKICH wizytówek, także tych, z którymi nie ma nic wspólnego. Gdy pojawi się drugi admin, przełączyć na osobną zmienną env z adresem stałego odbiorcy zamiast odpytywania roli.
    - **Działa już:** powiadomienia 1-2★, UI z przyciskiem "Zaproponuj AI" (`/reviews`, `/business/[id]`) + prefill propozycji, endpoint `/api/reviews/[id]/suggest`.
-   - **Reguły auto-publikacji (zmienione 2026-08-13):** 1-2★ → ponaglenie do osób z dostępem po **2h**, auto-publikacja bezpiecznej formułki po **20h**. 3-5★ → auto-publikacja po 22h. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`). Stare wartości (20h/23h) oznaczały, że przez pierwszą dobę nikt nie dostawał żadnego sygnału o negatywnej opinii.
+   - **Reguły auto-publikacji (obowiązujące od 2026-08-13, druga korekta tego dnia):** 1-2★ → powiadomienie mailowe do osób z dostępem **od razu** przy pierwszym biegu crona po odczytaniu opinii (`ALERT_AT_H = 0`). Auto-publikacja **po 15h dla wszystkich ocen**, bez rozróżnienia negatywne/pozytywne. Liczone od `create_time` opinii. Cron `/api/cron/auto-respond` (maxDuration 300, chroniony `CRON_SECRET`).
+     - **Historia progów:** pierwotnie alert 20h / publikacja neg. 23h / poz. 22h (przez pierwszą dobę nikt nie dostawał sygnału o negatywnej opinii), potem tego samego dnia 2h/20h/22h, ostatecznie 0h/15h/15h. Powód ostatniej zmiany: człowiek ma dostać sygnał natychmiast, a nie po dwóch godzinach, i mieć pełne 15h okno na własną odpowiedź.
+     - **Skutek uboczny `ALERT_AT_H = 0`:** przy nowej negatywnej opinii mail wychodzi w ciągu maks. 15 min (cykl crona) od jej pojawienia się w Google, także w nocy i w weekend.
    - **AI:** Claude **Sonnet 4.6** (`src/lib/ai.js`), fallback na sztywną formułkę gdy API padnie. Negatywne: przeprosiny + kontakt (telefon wizytówki), bez polemiki. Klucz `ANTHROPIC_API_KEY` dodany do Vercel 2026-06-03, działa. (Początkowo Haiku 4.5, podbity na Sonnet 2026-06-03 bo Haiku robił błędy polskiej odmiany. Prompt pisany poprawną polszczyzną z ogonkami + instrukcja formy grzecznościowej.)
    - **Język opinii:** Google sklejają oryginał + tłumaczenie w jednym polu `comment`. Parser `src/lib/reviewText.js` (`parseReviewComment`) rozdziela je (obsługuje format z `(Translated by Google)` i z `(Original)`). AI dostaje sam oryginał i odpowiada w jego języku, z zakazem znaku „–". UI pokazuje oryginał + tłumaczenie szarym drukiem pod spodem.
    - **Forma grzecznościowa:** model dostaje imię autora opinii (`reviewer_name`) i dobiera formę wg płci wynikającej z imienia (Pana/Pani z odmianą); gdy imię niejednoznaczne/zagraniczne/"Anonim", pisze neutralnie bez "Pan/Pani". Endpoint `suggest` pobiera `reviewer_name` w select.
@@ -547,7 +549,7 @@ where u.email = 'ADRES' and b.title ilike '%volkswagen%' and b.hidden = false;
 ```
 
 - Build lokalny wymaga atrap zmiennych (brak `.env.local`): `$env:NEXT_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"` itd., inaczej pada na "Collecting page data".
-- Okna czasowe auto-odpowiedzi (od 2026-08-13): `ALERT_AT_H = 2`, `NEG_PUBLISH_AT_H = 20`, `POS_PUBLISH_AT_H = 22` w `api/cron/auto-respond/route.js`.
+- Okna czasowe auto-odpowiedzi (od 2026-08-13, druga korekta): `ALERT_AT_H = 0`, `NEG_PUBLISH_AT_H = 15`, `POS_PUBLISH_AT_H = 15` w `api/cron/auto-respond/route.js`.
 - Awaryjny stop auto-publikacji: wyłączyć zadanie `auto-respond` w cron-job.org.
 
 ---
@@ -602,7 +604,25 @@ Helper `src/lib/dates.js`: `parseDbDate` (dokleja `Z` gdy w wartości nie ma str
 - ~~Mail sprostowanie do zespołu~~ - **WYSŁANY 2026-08-13**, treść: `maile/2026-08-13-wizytowki-sprostowanie.html`. Mówi o dwóch błędach (alert do jednej osoby + próg 20 min, godziny w UTC), o tym że sam automat zadziałał prawidłowo, i podaje nowe okna 2h/20h.
 - **Do obserwacji:** czy przy kolejnej negatywnej opinii mail dociera w ciągu kilku minut do wszystkich z dostępem. To pierwszy prawdziwy sprawdzian nowej logiki alertów.
 - Nie sprawdzono, czy `alert_settings` ma jakiekolwiek wiersze (zapytanie nie zostało wykonane). Po zmianie nie ma to już znaczenia dla alertów.
-- Ryzyko nowego okna publikacji: opinia wystawiona w piątek po południu dostanie automatyczną odpowiedź w sobotę. Przy 1-2★ publikowana jest bezpieczna formułka (przeprosiny + prośba o kontakt), bez polemiki.
+- Ryzyko okna publikacji: opinia wystawiona w piątek po południu dostanie automatyczną odpowiedź w piątek w nocy lub w sobotę rano. Przy 1-2★ publikowana jest bezpieczna formułka (przeprosiny + prośba o kontakt), bez polemiki.
+
+### Druga korekta okien czasowych (2026-08-13)
+
+**Decyzja Marcina:** powiadomienie o 1-2★ ma iść od razu po odczytaniu opinii przez system, a auto-publikacja ma następować po 15h dla wszystkich ocen.
+
+**Zmiana w `src/app/api/cron/auto-respond/route.js`:**
+
+| Stała | Było | Jest |
+|---|---|---|
+| `ALERT_AT_H` | 2 | **0** |
+| `NEG_PUBLISH_AT_H` | 20 | **15** |
+| `POS_PUBLISH_AT_H` | 22 | **15** |
+
+Poprawiona też treść maila z powiadomieniem: nie mówi już "czeka na odpowiedz juz Xh" (przy progu 0h wychodziło "0h"), tylko "Nowa opinia X★ czeka na odpowiedz" i deklaruje 15h okno liczone od wystawienia opinii.
+
+**Do zrobienia:**
+- Deploy na produkcję (bez tego cron dalej chodzi na 2h/20h/22h).
+- **Zespół dostał 2026-08-13 mail sprostowanie mówiący o oknach 2h/20h.** Ta informacja jest już nieaktualna. Zdecydować, czy wysyłać kolejną korektę, czy odczekać i podać nowe zasady przy najbliższej okazji.
 
 ### Commity i pliki tej sesji
 

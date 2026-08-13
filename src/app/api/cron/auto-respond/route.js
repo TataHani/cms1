@@ -22,11 +22,11 @@ const CUTOFF = new Date('2026-08-12T00:00:00Z')
 const MAX_PUBLISH_PER_RUN = 10
 
 // Okna czasowe liczone od momentu wystawienia opinii (create_time).
-// Ponaglenie idzie szybko, zeby czlowiek mial realna szanse odpowiedziec
-// pierwszy; automat wchodzi dopiero pod koniec doby, gdy nikt nie zareagowal.
-const ALERT_AT_H = 2         // 1-2*: ponaglenie do ludzi
-const NEG_PUBLISH_AT_H = 20  // 1-2*: auto-publikacja jesli nadal cisza
-const POS_PUBLISH_AT_H = 22  // 3-5*: auto-publikacja po cichu
+// Ponaglenie idzie natychmiast po odczytaniu opinii przez system, zeby czlowiek
+// mial pelne okno na wlasna odpowiedz; automat wchodzi po 15h ciszy.
+const ALERT_AT_H = 0         // 1-2*: ponaglenie do ludzi od razu
+const NEG_PUBLISH_AT_H = 15  // 1-2*: auto-publikacja jesli nadal cisza
+const POS_PUBLISH_AT_H = 15  // 3-5*: auto-publikacja po cichu
 
 const APP_URL = 'https://wizytowki.plichta.com.pl'
 
@@ -155,7 +155,7 @@ export async function GET(request) {
         .from('reviews').update({ suggested_reply: suggestion }).eq('id', review.id)
     }
 
-    // 1-2*: ponaglenie do ludzi po 20h (raz)
+    // 1-2*: powiadomienie do ludzi od razu po odczytaniu opinii (raz)
     if (isNegative && ageH >= ALERT_AT_H && !review.alert_sent_at) {
       const recipients = await getRecipients(business)
       for (const email of recipients) {
@@ -165,9 +165,9 @@ export async function GET(request) {
             'Negatywna opinia czeka na odpowiedz - ' + business.title,
             `
               <h2>Negatywna opinia bez odpowiedzi</h2>
-              <p>Opinia ${review.star_rating}★ dla <strong>${business.title}</strong> czeka na odpowiedz juz ${Math.floor(ageH)}h.</p>
+              <p>Nowa opinia ${review.star_rating}★ dla <strong>${business.title}</strong> czeka na odpowiedz.</p>
               <p><strong>Tresc:</strong> ${review.comment || '(brak tresci)'}</p>
-              <p>Jesli nikt nie odpowie w ciagu ok. ${NEG_PUBLISH_AT_H - ALERT_AT_H}h, system opublikuje odpowiedz automatycznie.</p>
+              <p>Jesli nikt nie odpowie w ciagu ${NEG_PUBLISH_AT_H}h od wystawienia opinii, system opublikuje odpowiedz automatycznie.</p>
               <p><a href="${APP_URL}/reviews">Odpowiedz teraz w aplikacji</a></p>
             `
           )
@@ -180,7 +180,7 @@ export async function GET(request) {
       alertsSent++
     }
 
-    // Auto-publikacja: 1-2* po 23h, 3-5* po 22h
+    // Auto-publikacja: 15h od wystawienia opinii, niezaleznie od oceny
     const publishAt = isNegative ? NEG_PUBLISH_AT_H : POS_PUBLISH_AT_H
     if (ageH >= publishAt && published < MAX_PUBLISH_PER_RUN) {
       const connection = connectionMap.get(business.google_connection_id)
