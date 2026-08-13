@@ -586,6 +586,14 @@ Zawiodła **sygnalizacja** i **obietnica z maila do zespołu z 2026-08-12**, kt�
 
 **Marka w podpisie:** `brandName()` w `src/lib/ai.js` mapuje nazwę wizytówki na markę (`Audi`, `Volkswagen` także z "VW", `Ford`), fallback na pełną nazwę wizytówki. Podpis brzmi "Zespół Audi", nie "Zespół Audi Gdańsk Stadion".
 
+### Godziny w panelu pokazywały UTC (naprawione 2026-08-13)
+
+Panel wyświetlał opinię wystawioną o 15:08 jako 13:08. PostgREST zwraca `create_time` bez oznaczenia strefy (`2026-08-12T13:08:14.392666`), a `new Date()` bierze taki string za czas lokalny przeglądarki.
+
+Helper `src/lib/dates.js`: `parseDbDate` (dokleja `Z` gdy w wartości nie ma strefy) oraz `formatDateTime` / `formatDate` z wymuszoną strefą `Europe/Warsaw`. Użyty w `/reviews`, `/business/[id]` (data opinii i data odpowiedzi) oraz `/alerts` (`created_at`). Tą samą funkcją przeliczane są filtry zakresu dat i sortowanie, żeby wyświetlana godzina i filtr "Dziś" się nie rozjeżdżały.
+
+**Nie ruszone:** `/posts` (`created_at` nadal przez goły `new Date`) - tabela `posts` i tak nie istnieje w bazie.
+
 **Skutek uboczny do świadomej akceptacji:** strona `/alert-settings` nie ma już wpływu na maile o negatywnych opiniach. Wyłączenie alertów per wizytówka przestało działać, bo to właśnie ta zależność spowodowała ciszę. Jeśli kiedyś ktoś będzie chciał wypisać się z maili, trzeba dodać to jawnie w `getRecipients`.
 
 ### Otwarte
