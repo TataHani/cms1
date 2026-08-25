@@ -63,6 +63,8 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const businessQuery = searchParams.get('business')
   const days = Number(searchParams.get('days')) || 7
+  const reviewerQuery = searchParams.get('reviewer')
+  const includeRaw = searchParams.get('raw') === '1'
 
   if (!businessQuery) {
     return Response.json({
@@ -141,12 +143,20 @@ export async function GET(request) {
 
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
 
-  const { data: dbReviews } = await supabase
+  let dbQuery = supabase
     .from('reviews')
     .select('id, google_review_id, reviewer_name, star_rating, create_time, has_reply, reply_comment, reply_update_time, is_auto_reply, auto_replied_at')
     .eq('business_id', business.id)
     .gte('create_time', since)
     .order('create_time', { ascending: false })
+
+  // Zawezenie do jednego autora - do porownywania pojedynczych przypadkow
+  // (odpowiedz widoczna vs niewidoczna publicznie) bez scian JSON-a.
+  if (reviewerQuery) {
+    dbQuery = dbQuery.ilike('reviewer_name', '%' + reviewerQuery + '%')
+  }
+
+  const { data: dbReviews } = await dbQuery
 
   const comparison = (dbReviews || []).map(row => {
     const g = googleMap.get(row.google_review_id)
@@ -170,6 +180,9 @@ export async function GET(request) {
       reviewer: row.reviewer_name,
       stars: row.star_rating,
       create_time: row.create_time,
+      // Pelny obiekt prosto z Google - pokazuje pola, ktorych nie mapujemy
+      // do bazy (dane autora, sciezka name, znaczniki czasu).
+      ...(includeRaw ? { raw_google: g || null } : {}),
       db: {
         has_reply: row.has_reply,
         is_auto_reply: row.is_auto_reply,
@@ -191,6 +204,7 @@ export async function GET(request) {
     google_account_id: business.google_account_id,
     google_location_id: business.google_location_id,
     days,
+    reviewer_filter: reviewerQuery || null,
     google_reviews_fetched: googleReviews.length,
     db_reviews_in_range: comparison.length,
     mismatches: comparison.filter(c => c.status.startsWith('ROZBIEZNOSC') || c.status.startsWith('BRAK')).length,
