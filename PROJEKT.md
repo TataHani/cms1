@@ -666,3 +666,165 @@ $env:NEXT_PUBLIC_SUPABASE_URL="https://dummy.supabase.co"; $env:SUPABASE_SERVICE
 $env:GOOGLE_CLIENT_ID="dummy"; $env:GOOGLE_CLIENT_SECRET="dummy"; $env:GOOGLE_REDIRECT_URI="https://dummy.local/cb"
 npm run build
 ```
+
+---
+
+## Sesja 2026-08-17
+
+### Zgłoszenie
+
+"Przez weekend system nie odpowiedział na opinie."
+
+### Diagnoza: automat zadziałał prawidłowo
+
+Wszystkie 6 opinii z 14-15.08 dostały auto-odpowiedź w oknie 15h, co do kilku minut (odstępy 15h01 do 15h14). Ostatnia publikacja 16.08 07:45 UTC. Cron `auto-respond` chodził przez cały weekend, publikacja do Google działała. Wszystkie opinie miały 5★, więc `alert_sent_at = null` jest poprawne (maile idą tylko przy 1-2★).
+
+Sprawdzenia poza bazą: `wizytowki.plichta.com.pl/login` zwraca 200, `/api/cron/auto-respond` bez sekretu zwraca 401 (endpoint wdrożony i chroniony). Kod bez zmian od 2026-08-13.
+
+### Prawdziwa przyczyna: salon Volkswagen Gdynia (osobowe) nie istnieje w systemie
+
+W bazie jest wyłącznie **"Centrum Samochodów Dostawczych Volkswagen Plichta Gdynia"**. Salonu osobowego w Gdyni NIE MA i nigdy nie było: lista zawiera dokładnie 10 wizytówek VW, czyli tyle samo co przed incydentem kaskady z 2026-08-12. Kaskada tej wizytówki nie zjadła.
+
+Skutek: opinie wystawiane na tej wizytówce nie trafiają do bazy, nie widać ich w panelu i nikt na nie nie odpowiada (ani człowiek, ani automat). Z zewnątrz wygląda to jak awaria auto-odpowiedzi.
+
+**Naprawa (po stronie Google, nie w kodzie):** dodać konto Google podpięte do apki jako menedżera lokalizacji "Volkswagen Gdynia" w Google Business Profile, następnie /settings → **"Polacz konto"** (nie "Odlacz").
+
+### Ford Plichta Gdańsk jest ukryty CELOWO
+
+`businesses.hidden = true` dla "Ford Plichta Gdańsk" (656 opinii, najnowsza 2026-08-05) to **świadoma decyzja, nie awaria**. Ukryta wizytówka jest odfiltrowana z crona `sync-reviews` i z auto-odpowiedzi, więc Ford stoi i tak ma być. Nie przywracać flagi bez pytania.
+
+### Wnioski diagnostyczne
+
+- Zanim uznasz auto-odpowiedzi za zepsute, sprawdź czy wizytówka, na której widać opinię bez odpowiedzi, w ogóle jest w bazie i czy nie ma `hidden = true`. Brakująca wizytówka wygląda identycznie jak martwy automat.
+- Zapytanie kontrolne (jednym rzutem widać hidden, liczbę opinii i świeżość):
+
+```sql
+select b.title, b.hidden, count(r.id) as opinii, max(r.create_time) as najnowsza
+from businesses b left join reviews r on r.business_id = b.id
+group by b.id, b.title, b.hidden order by b.title;
+```
+
+### Podpis: potwierdzone, że ma być sama marka
+
+Marcin przypomniał regułę: podpis zawsze krótki i jednakowy, "Z wyrazami szacunku, / Zespół <marka>", gdzie marka to wyłącznie `Audi` albo `Volkswagen`, niezależnie od lokalizacji i od tego czy wizytówka jest osobowa czy dostawcza. Nigdy "Zespół Volkswagen Samochody Dostawcze Gdynia".
+
+**Kod już to realizuje** - `brandName()` w `src/lib/ai.js:14` dopasowuje wzorzec w dowolnym miejscu nazwy (`/volkswagen|\bvw\b/i`, `/audi/i`, `/ford/i`). Sprawdzone na wszystkich 18 wizytówkach z bazy: każda zawiera nazwę marki, więc każda dostaje krótki podpis. Fallback (pełna nazwa wizytówki) uruchomiłby się tylko dla "Testowa firma".
+
+### Otwarte
+
+- **Nadanie dostępu do wizytówki "Volkswagen Gdynia" (osobowe)** w Google Business Profile, potem reconnect przez "Polacz konto". Do czasu naprawy opinie tego salonu są poza systemem.
+- **Weryfikacja podpisów na opublikowanych odpowiedziach** - zapytanie niżej. Model dostaje podpis jako instrukcję w promptcie, więc teoretycznie może od niej odejść. Gdyby któryś podpis był dłuższy niż "Zespół Audi" / "Zespół Volkswagen", doklejać podpis twardo w kodzie zamiast prosić o niego model.
+
+```sql
+-- czy podpisy auto-odpowiedzi sa krotkie i jednakowe
+select b.title, right(r.reply_comment, 40) as podpis
+from reviews r join businesses b on b.id = r.business_id
+where r.is_auto_reply = true
+order by r.auto_replied_at desc limit 20;
+```
+
+- **Fallback w `brandName`** zwraca dziś pełną nazwę wizytówki, gdy marki nie rozpozna. Przy dokładaniu nowej marki (Cupra, Skoda) podpis wyszedłby długi. Propozycja: zmienić fallback na `'Plichta'`. Decyzja nie zapadła.
+
+---
+
+## Sesja 2026-08-25: odpowiedzi opublikowane przez API, niewidoczne publicznie
+
+### Zgłoszenie
+
+"Znowu mamy opinie, na które w Google brak odpowiedzi, a w panelu odpowiedź jest widoczna." Trzecie zgłoszenie tego typu (poprzednie 19.08).
+
+### Objaw
+
+Publikacja odpowiedzi przez API kończy się sukcesem, baza i Google API zgodnie pokazują odpowiedź, a w publicznym widoku Map jej NIE MA. Opinia jest publicznie widoczna, brakuje wyłącznie odpowiedzi.
+
+Przypadki (wszystkie potwierdzone w incognito):
+
+| Opinia | Wizytówka | Auto-odpowiedź (UTC) | Los |
+|---|---|---|---|
+| Inga Wiśniewska, 17.08 | Audi Centrum Gdynia | 18.08 02:00 | zespół nadpisał ręcznie 19.08 |
+| Maciej Wasyl, 22.08 (5★ bez treści) | Audi Centrum Gdynia | 23.08 03:45 | zespół nadpisał ręcznie 25.08 |
+| Łukasz Grzywacz, 22.08 | VW Toruń Salon | 23.08 00:15 | użyty do testu, patrz niżej |
+
+### Co WYKLUCZONO danymi (nie szukać tu ponownie)
+
+| Podejrzany | Obalone przez |
+|---|---|
+| Treść odpowiedzi | widoczne i niewidoczne nieodróżnialne stylem, długością, obecnością imion pracowników |
+| Salon, konto Google, token | zniknięcia na dwóch różnych kontach, reszta odpowiedzi z tych samych kont działa |
+| Pora publikacji | odpowiedzi z 23:15 i 02:45 są widoczne |
+| Serie, rate limiting | odpowiedzi publikowane w tej samej sekundzie są widoczne |
+| Filtrowanie opinii przez Google | sama opinia jest publicznie widoczna |
+| API v4 jako całość | dziesiątki odpowiedzi z tego samego kodu działają |
+| Wiek odpowiedzi (propagacja) | odpowiedź z tego samego dnia bywa widoczna, dwudniowa nie |
+| Stan w API | oba przypadki `reviewReplyState: APPROVED` |
+| Edycja opinii przez autora | `updateTime` równe `createTime` |
+
+### Nowe pola odkryte w surowej odpowiedzi Google (v4)
+
+- **`reviewReplyState`** - stan moderacji odpowiedzi (`APPROVED`, `PENDING`, `REJECTED`). **W obu niewidocznych odpowiedziach było `APPROVED`, więc pole NIE nadaje się do wykrywania tej awarii.**
+- **`reviewReplyUrl`** - bezpośredni link do odpowiedzi w panelu business.google.com
+
+### OBEJŚCIE (potwierdzone 2026-08-25)
+
+**Ponowna publikacja tej samej odpowiedzi z minimalną zmianą treści (jedno słowo) sprawia, że odpowiedź pojawia się publicznie w kilkanaście minut.** Sprawdzone na opinii Łukasza Grzywacza, która przez 2,5 dnia była niewidoczna. Zgodne z obejściem opisanym na Local Search Forum.
+
+Republikacja identycznej treści prawdopodobnie nie zadziała (Google potraktuje jako brak zmiany) - nie testowane, ale forum na to wskazuje.
+
+**Decyzja Marcina: NIE budujemy przycisku "Opublikuj ponownie" w panelu.** Zespół dopisuje odpowiedź ręcznie w Google Business Profile, gdy zauważy brak. Ręczne dopisanie działa z tego samego powodu co obejście: jest ponowną publikacją.
+
+### Dlaczego nie da się tego wykrywać automatycznie
+
+- Google API zwraca dla odpowiedzi niewidocznej dokładnie to samo co dla widocznej (`reviewReply` + `APPROVED`).
+- **Places API (New) nie ma w obiekcie Review żadnego pola z odpowiedzią właściciela** (pola: `name`, `text`, `originalText`, `rating`, `authorAttribution`, `publishTime`, `flagContentUri`, `googleMapsUri`, `visitDate`). Nie ma czego porównywać.
+- Zostaje scraping Map: kruchy i niezgodny z regulaminem Google.
+
+Wniosek: wykrywanie jest i pozostaje ludzkie, wyrywkowe.
+
+### Kontekst po stronie Google
+
+- Google moderuje **każdą** odpowiedź przed publikacją: zwykle do 10 minut, ale oficjalnie **nawet do 30 dni** ([Manage customer reviews](https://support.google.com/business/answer/3474050)).
+- Na liście "Known issues" Business Profile API tego problemu NIE MA. Udokumentowana jest tam tylko niespójność paginacji `reviews.list` od strony 2.
+- Objaw opisany na forach (bez ustalonej przyczyny, support Google bezradny, nawroty po miesiącach): [Local Search Forum](https://localsearchforum.com/threads/review-responses-not-showing-publicly-on-google.62761/), [Response to review only visible to admins](https://support.google.com/business/thread/333179949/).
+
+### Narzędzie diagnostyczne
+
+`/api/debug-reply` (tylko rola admin, wyłącznie odczyt, nic nie zapisuje). Rozszerzone 2026-08-25 (`1421b63`) o:
+
+- `reviewer=Nazwisko` - zawężenie do jednego autora
+- `raw=1` - pełny, nieprzycięty obiekt opinii prosto z Google (tu widać `reviewReplyState` i `reviewReplyUrl`)
+
+```
+https://wizytowki.plichta.com.pl/api/debug-reply?business=Toruń Autoryzowany&days=14&raw=1&reviewer=Grzywacz
+```
+
+**Ograniczenie narzędzia:** iteruje po opiniach Z BAZY i szuka ich w Google. Opinia obecna w Google, a nieobecna w bazie, nie pojawi się w wyniku w ogóle, nawet jako brak.
+
+Republikacja odpowiedzi bez dokładania kodu (konsola przeglądarki, zalogowany admin, `id` opinii z bazy):
+
+```js
+await fetch('/api/reviews/ID/reply',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reply:"NOWA TRESC"})}).then(r=>r.json())
+```
+
+### Pułapki tej diagnozy (kosztowały najwięcej czasu)
+
+- **Ręczne nadpisanie odpowiedzi przez zespół kasuje dowód.** Z trzech przypadków dwa były już nadpisane, gdy zaczęliśmy analizę. Przy kolejnym zgłoszeniu prosić o nieruszanie opinii do czasu zbadania.
+- Panel może pokazywać nieaktualną treść odpowiedzi. Sync jest inkrementalny i opiera się na `updateTime` OPINII, który nie zmienia się, gdy ktoś edytuje samą odpowiedź w Google (przypadek Romana Miłosza: baza 22.08, Google 24.08).
+- Zespół ręcznie dopisując odpowiedzi używa długiego podpisu ("Zespół Audi Centrum Gdynia"), niezgodnego z regułą "Zespół <marka>". To wersje ludzkie, nie błąd `brandName()`.
+
+### Co poszło na zewnątrz (2026-08-25)
+
+| Dokument | Plik (folder `maile`, w `.gitignore`) | Status |
+|---|---|---|
+| Mail do zespołu: na czym stoimy, brak rozwiązania systemowego, prośba o zgłaszanie PRZED ręcznym dopisaniem | `2026-08-25-wizytowki-odpowiedzi-niewidoczne.html` | przygotowany |
+| Wyjaśnienie dla importera VW (opinia Łukasza Grzywacza, Toruń): dowód że odpowiedź poszła w 15h, została przyjęta i zatwierdzona, prośba o nienaliczanie kar | `2026-08-25-importer-vw-wyjasnienie-opinia-torun.html` | przygotowany |
+| Zgłoszenie do wsparcia Google Business Profile API (EN), z gotowymi polami formularza na górze pliku | `2026-08-25-google-support-reply-not-visible.md` | **ZGŁOSZONE 2026-08-25, wątek otwarty** |
+
+Kanał zgłoszenia: `support.google.com/business/contact/api_default` (wsparcie techniczne API, wymaga zalogowania kontem z dostępem do wizytówek). Kanał pomocniczy: `support.google.com/business/community` z prefiksem `[API]` w tytule.
+
+**Argumenty użyte wobec importera** (gdyby wracał temat kar): czas reakcji 15h 10min, HTTP 200 przy publikacji, `reviewReplyState: APPROVED` w API, 16 innych odpowiedzi tej samej wizytówki wyświetlanych poprawnie, oraz to że ponowna wysyłka identycznej treści naprawiła sprawę bez żadnej zmiany po naszej stronie.
+
+### Otwarte
+
+- **Odpowiedź od wsparcia Google** na pytanie, dlaczego odpowiedź ze statusem `APPROVED` nie trafia do widoku publicznego. Wątek otwarty 2026-08-25, czekamy.
+- Przyczyna pozostaje NIEZNANA. Mamy objaw, wykluczenia i działające obejście.
+- Robocza interpretacja do potwierdzenia przez Google: `APPROVED` opisuje moderację treści, a publikacja do widoku publicznego to osobny etap, który potrafi zawieść po cichu. Republikacja pomaga, bo wywołuje ten etap ponownie.
