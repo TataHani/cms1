@@ -815,8 +815,8 @@ await fetch('/api/reviews/ID/reply',{method:'POST',headers:{'Content-Type':'appl
 
 | Dokument | Plik (folder `maile`, w `.gitignore`) | Status |
 |---|---|---|
-| Mail do zespołu: na czym stoimy, brak rozwiązania systemowego, prośba o zgłaszanie PRZED ręcznym dopisaniem | `2026-08-25-wizytowki-odpowiedzi-niewidoczne.html` | przygotowany |
-| Wyjaśnienie dla importera VW (opinia Łukasza Grzywacza, Toruń): dowód że odpowiedź poszła w 15h, została przyjęta i zatwierdzona, prośba o nienaliczanie kar | `2026-08-25-importer-vw-wyjasnienie-opinia-torun.html` | przygotowany |
+| Mail do zespołu: na czym stoimy, brak rozwiązania systemowego, prośba o zgłaszanie PRZED ręcznym dopisaniem | `2026-08-25-wizytowki-odpowiedzi-niewidoczne.html` | **WYSŁANY 2026-08-25** |
+| Wyjaśnienie dla importera VW (opinia Łukasza Grzywacza, Toruń): dowód że odpowiedź poszła w 15h, została przyjęta i zatwierdzona, prośba o nienaliczanie kar | `2026-08-25-importer-vw-wyjasnienie-opinia-torun.html` | **WYSŁANY 2026-08-25** |
 | Zgłoszenie do wsparcia Google Business Profile API (EN), z gotowymi polami formularza na górze pliku | `2026-08-25-google-support-reply-not-visible.md` | **ZGŁOSZONE 2026-08-25, wątek otwarty** |
 
 Kanał zgłoszenia: `support.google.com/business/contact/api_default` (wsparcie techniczne API, wymaga zalogowania kontem z dostępem do wizytówek). Kanał pomocniczy: `support.google.com/business/community` z prefiksem `[API]` w tytule.
@@ -826,5 +826,7 @@ Kanał zgłoszenia: `support.google.com/business/contact/api_default` (wsparcie 
 ### Otwarte
 
 - **Odpowiedź od wsparcia Google** na pytanie, dlaczego odpowiedź ze statusem `APPROVED` nie trafia do widoku publicznego. Wątek otwarty 2026-08-25, czekamy.
+- **Reakcja importera VW** na wyjaśnienie z 25.08: czy opinia zostanie uznana za obsłużoną w terminie i czy odstąpią od kar.
+- **Czy zespół zacznie zgłaszać przypadki przed ręcznym dopisaniem odpowiedzi** (o to prosi mail z 25.08). Od tego zależy, czy przy kolejnym zgłoszeniu będziemy mieli nietknięty materiał dla Google.
 - Przyczyna pozostaje NIEZNANA. Mamy objaw, wykluczenia i działające obejście.
 - Robocza interpretacja do potwierdzenia przez Google: `APPROVED` opisuje moderację treści, a publikacja do widoku publicznego to osobny etap, który potrafi zawieść po cichu. Republikacja pomaga, bo wywołuje ten etap ponownie.
