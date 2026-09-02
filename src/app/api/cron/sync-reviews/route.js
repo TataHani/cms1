@@ -126,19 +126,6 @@ export async function GET(request) {
 
     for (const business of businesses) {
       try {
-        // Pobierz istniejące opinie z DB zanim zaczniemy sync
-        // Dzięki temu wiemy co jest "naprawdę nowe" vs "import historyczny"
-        const { data: existingReviews } = await supabase
-          .from('reviews')
-          .select('id, google_review_id, comment')
-          .eq('business_id', business.id)
-          .limit(50000)
-
-        const existingReviewMap = new Map(
-          existingReviews?.map(r => [r.google_review_id, r]) || []
-        )
-        const isInitialImport = existingReviewMap.size === 0
-
         // Inkrementalny sync: pobierz max(update_time) z DB i ściągaj tylko nowsze.
         // Margines 1h - bufor na edytowane opinie i opóźnienia Google API.
         const { data: latestReview } = await supabase
@@ -153,6 +140,28 @@ export async function GET(request) {
         const stopAtTime = latestReview?.update_time
           ? new Date(new Date(latestReview.update_time).getTime() - 60 * 60 * 1000)
           : null
+
+        // Mapa do wykrywania edycji tresci. Ograniczona do tego samego zakresu
+        // czasu co pobranie z Google - dalszych opinii Google i tak nie zwroci,
+        // wiec nie ma czego porownywac. Wczesniej to zapytanie ciagnelo przy
+        // KAZDYM biegu crona wszystkie opinie wizytowki razem z kolumna comment
+        // (tysiace wierszy co 5 minut) i bylo glownym zrodlem egressu, przez
+        // ktory 2026-08-26 projekt zostal zablokowany na planie free.
+        let existingQuery = supabase
+          .from('reviews')
+          .select('id, google_review_id, comment')
+          .eq('business_id', business.id)
+          .limit(50000)
+
+        if (stopAtTime) {
+          existingQuery = existingQuery.gte('update_time', stopAtTime.toISOString())
+        }
+
+        const { data: existingReviews } = await existingQuery
+
+        const existingReviewMap = new Map(
+          existingReviews?.map(r => [r.google_review_id, r]) || []
+        )
 
         const allReviews = await fetchAllReviews(
           business.google_account_id,
