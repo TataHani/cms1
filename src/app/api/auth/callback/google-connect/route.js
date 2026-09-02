@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
+import { fetchAllLocations } from '../../../../../lib/googleLocations'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -73,7 +74,13 @@ export async function GET(request) {
     redirect('/settings?error=db_error')
   }
 
-  // Pobierz wizytówki z Google Business Profile API
+  // Pobierz wizytowki z Google Business Profile API.
+  // Import moze pasc mimo udanego OAuth (konto bez dostepu do konta
+  // organizacji, blad API), dlatego wynik trafia do zmiennej i decyduje
+  // o tresci przekierowania - wczesniej kazdy blad konczyl sie ekranem sukcesu.
+  let importError = null
+  let foundCount = 0
+
   try {
     const accountsResponse = await fetch(
       'https://mybusinessaccountmanagement.googleapis.com/v1/accounts',
@@ -84,40 +91,43 @@ export async function GET(request) {
 
     const accountsData = await accountsResponse.json()
 
-    if (accountsData.accounts && accountsData.accounts.length > 0) {
-      for (const account of accountsData.accounts) {
-        const locationsResponse = await fetch(
-          'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri',
-          {
-            headers: { 'Authorization': 'Bearer ' + tokens.access_token }
-          }
-        )
+    if (accountsData.error) {
+      throw new Error(accountsData.error.message || 'Google API nie zwrocilo listy kont')
+    }
 
-        const locationsData = await locationsResponse.json()
+    if (!accountsData.accounts || accountsData.accounts.length === 0) {
+      throw new Error('To konto Google nie ma dostepu do zadnego konta Business Profile')
+    }
 
-        if (locationsData.locations) {
-          for (const location of locationsData.locations) {
-            await supabase.from('businesses').upsert({
-              user_id: userId,
-              google_connection_id: connection.id,
-              google_account_id: account.name,
-              google_location_id: location.name,
-              location_name: location.name,
-              title: location.title || 'Bez nazwy',
-              address: location.storefrontAddress?.addressLines?.join(', ') || '',
-              phone: location.phoneNumbers?.primaryPhone || '',
-              website: location.websiteUri || '',
-              last_synced_at: new Date().toISOString()
-            }, {
-              onConflict: 'user_id,google_location_id'
-            })
-          }
-        }
+    for (const account of accountsData.accounts) {
+      const locations = await fetchAllLocations(account.name, tokens.access_token)
+
+      for (const location of locations) {
+        await supabase.from('businesses').upsert({
+          user_id: userId,
+          google_connection_id: connection.id,
+          google_account_id: account.name,
+          google_location_id: location.name,
+          location_name: location.name,
+          title: location.title || 'Bez nazwy',
+          address: location.storefrontAddress?.addressLines?.join(', ') || '',
+          phone: location.phoneNumbers?.primaryPhone || '',
+          website: location.websiteUri || '',
+          last_synced_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,google_location_id'
+        })
+        foundCount++
       }
     }
   } catch (e) {
     console.error('Error fetching locations:', e)
+    importError = e.message
   }
 
-  redirect('/settings?success=connected')
+  if (importError) {
+    redirect('/settings?error=import_failed&msg=' + encodeURIComponent(importError))
+  }
+
+  redirect('/settings?success=connected&found=' + foundCount)
 }

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
+import { fetchAllLocations } from '../../../../lib/googleLocations'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -82,52 +83,43 @@ export async function GET() {
     const skipped = []
 
     for (const account of accountsData.accounts) {
-      const locationsResponse = await fetch(
-        'https://mybusinessbusinessinformation.googleapis.com/v1/' + account.name + '/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri',
-        {
-          headers: { 'Authorization': 'Bearer ' + accessToken }
-        }
-      )
+      const locations = await fetchAllLocations(account.name, accessToken)
 
-      const locationsData = await locationsResponse.json()
+      for (const location of locations) {
+        // Blokada duplikatu: jezeli ta wizytowka jest juz w systemie u INNEGO usera
+        // (a current user jej nie ma), pomin - admin nadaje dostep przez business_permissions
+        const { data: existing } = await supabase
+          .from('businesses')
+          .select('user_id')
+          .eq('google_location_id', location.name)
 
-      if (locationsData.locations) {
-        for (const location of locationsData.locations) {
-          // Blokada duplikatu: jezeli ta wizytowka jest juz w systemie u INNEGO usera
-          // (a current user jej nie ma), pomin - admin nadaje dostep przez business_permissions
-          const { data: existing } = await supabase
-            .from('businesses')
-            .select('user_id')
-            .eq('google_location_id', location.name)
+        const hasOwn = existing?.some(e => e.user_id === userId)
+        const hasOthers = existing?.some(e => e.user_id !== userId)
 
-          const hasOwn = existing?.some(e => e.user_id === userId)
-          const hasOthers = existing?.some(e => e.user_id !== userId)
-
-          if (hasOthers && !hasOwn) {
-            skipped.push({
-              title: location.title || 'Bez nazwy',
-              google_location_id: location.name,
-              reason: 'Wizytowka juz istnieje w systemie pod kontem innego uzytkownika. Popros admina o nadanie uprawnien w panelu admin -> Uprawnienia.'
-            })
-            continue
-          }
-
-          await supabase.from('businesses').upsert({
-            user_id: userId,
-            google_connection_id: connection.id,
-            google_account_id: account.name,
-            google_location_id: location.name,
-            location_name: location.name,
+        if (hasOthers && !hasOwn) {
+          skipped.push({
             title: location.title || 'Bez nazwy',
-            address: location.storefrontAddress?.addressLines?.join(', ') || '',
-            phone: location.phoneNumbers?.primaryPhone || '',
-            website: location.websiteUri || '',
-            last_synced_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id,google_location_id'
+            google_location_id: location.name,
+            reason: 'Wizytowka juz istnieje w systemie pod kontem innego uzytkownika. Popros admina o nadanie uprawnien w panelu admin -> Uprawnienia.'
           })
-          importedCount++
+          continue
         }
+
+        await supabase.from('businesses').upsert({
+          user_id: userId,
+          google_connection_id: connection.id,
+          google_account_id: account.name,
+          google_location_id: location.name,
+          location_name: location.name,
+          title: location.title || 'Bez nazwy',
+          address: location.storefrontAddress?.addressLines?.join(', ') || '',
+          phone: location.phoneNumbers?.primaryPhone || '',
+          website: location.websiteUri || '',
+          last_synced_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,google_location_id'
+        })
+        importedCount++
       }
     }
 

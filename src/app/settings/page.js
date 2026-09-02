@@ -7,10 +7,30 @@ export default function SettingsPage() {
   const [user, setUser] = useState(null)
   const [connections, setConnections] = useState([])
   const [loading, setLoading] = useState(true)
+  const [notice, setNotice] = useState(null)
 
   useEffect(() => {
     loadData()
+    readNotice()
   }, [])
+
+  // Komunikat po powrocie z OAuth Google. Czytany z adresu, bo callback
+  // przekierowuje tu z ?success= albo ?error=.
+  const readNotice = () => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('success') === 'connected') {
+      const found = params.get('found')
+      setNotice({
+        type: 'ok',
+        text: 'Konto Google polaczone. Wizytowek pobranych z Google: ' + (found ?? '?') + '.'
+      })
+    } else if (params.get('error')) {
+      setNotice({
+        type: 'err',
+        text: 'Nie udalo sie pobrac wizytowek: ' + (params.get('msg') || params.get('error'))
+      })
+    }
+  }
 
   const loadData = async () => {
     try {
@@ -93,6 +113,12 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {notice && (
+          <div className={`mb-6 p-4 rounded-xl text-sm ${notice.type === 'ok' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+            {notice.text}
+          </div>
+        )}
 
         {/* Połączone konta Google */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
