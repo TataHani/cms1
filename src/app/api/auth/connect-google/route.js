@@ -1,9 +1,8 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../../lib/session'
 import { redirect } from 'next/navigation'
 
 export async function GET() {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     redirect('/login')

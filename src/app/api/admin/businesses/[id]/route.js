@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../../../lib/session'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -10,8 +10,7 @@ const supabase = createClient(
 // (opinie, alerty, uprawnienia, konkurencja, ustawienia alertow), a sama
 // wizytowka wrocilaby przy nastepnym polaczeniu konta Google.
 export async function DELETE(request, { params }) {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })

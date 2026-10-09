@@ -1,7 +1,42 @@
 'use client'
 import { useEffect, useState } from 'react'
 
+const IDLE_MS = 15 * 60 * 1000
+// The server only sees requests, so on user activity we ping it at most once a minute
+// to keep its idle clock in sync with what the user actually does on the page
+const PING_EVERY_MS = 60 * 1000
+
+function useIdleLogout() {
+  useEffect(() => {
+    const logout = () => { window.location.href = '/api/auth/logout' }
+    let timer = setTimeout(logout, IDLE_MS)
+    let lastPing = Date.now()
+
+    const onActivity = async () => {
+      clearTimeout(timer)
+      timer = setTimeout(logout, IDLE_MS)
+      if (Date.now() - lastPing < PING_EVERY_MS) return
+      lastPing = Date.now()
+      try {
+        const res = await fetch('/api/auth/session')
+        const data = await res.json()
+        if (!data.user) logout()
+      } catch {
+        // network hiccup: the server still enforces the timeout on the next request
+      }
+    }
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart']
+    events.forEach(e => window.addEventListener(e, onActivity, { passive: true }))
+    return () => {
+      clearTimeout(timer)
+      events.forEach(e => window.removeEventListener(e, onActivity))
+    }
+  }, [])
+}
+
 export default function NavBar({ activePage, printHidden = false }) {
+  useIdleLogout()
   const [unreadCount, setUnreadCount] = useState(0)
   const [isAdmin, setIsAdmin] = useState(false)
 

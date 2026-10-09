@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../lib/session'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -43,8 +43,7 @@ async function getAccessToken(connection) {
 // Nic nie zapisuje w reviews - sluzy wylacznie do diagnozy "panel mowi, ze
 // odpowiedz jest, a na Google jej nie widac".
 export async function GET(request) {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })

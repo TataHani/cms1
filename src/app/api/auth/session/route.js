@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../../lib/session'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -7,8 +7,7 @@ const supabase = createClient(
 )
 
 export async function GET() {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     return Response.json({ user: null })
@@ -16,7 +15,7 @@ export async function GET() {
 
   const { data: user } = await supabase
     .from('users')
-    .select('*')
+    .select('id, email, role')
     .eq('id', userId)
     .single()
 

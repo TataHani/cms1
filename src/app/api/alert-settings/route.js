@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../lib/session'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -7,8 +7,7 @@ const supabase = createClient(
 )
 
 export async function GET() {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })
@@ -27,8 +26,7 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     return Response.json({ error: 'Not authenticated' }, { status: 401 })

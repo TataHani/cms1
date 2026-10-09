@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { createSession } from '../../../../lib/session'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -29,12 +29,7 @@ export async function POST(request) {
     return Response.json({ error: 'Bledny email lub haslo' }, { status: 401 })
   }
 
-  cookies().set('user_id', user.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30
-  })
+  await createSession(user.id)
 
   return Response.json({ success: true, user: { id: user.id, email: user.email } })
 }

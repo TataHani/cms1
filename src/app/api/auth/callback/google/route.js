@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { createSession } from '../../../../../lib/session'
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
@@ -64,13 +64,7 @@ export async function GET(request) {
     redirect('/?error=db_error')
   }
 
-  // Ustaw cookie z ID użytkownika
-  cookies().set('user_id', user.id, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30, // 30 dni
-  })
+  await createSession(user.id)
 
   redirect('/')
 }

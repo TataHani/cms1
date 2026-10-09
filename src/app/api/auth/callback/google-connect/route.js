@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getUserId } from '../../../../../lib/session'
 import { redirect } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 import { fetchAllLocations } from '../../../../../lib/googleLocations'
@@ -9,8 +9,7 @@ const supabase = createClient(
 )
 
 export async function GET(request) {
-  const cookieStore = cookies()
-  const userId = cookieStore.get('user_id')?.value
+  const userId = await getUserId()
 
   if (!userId) {
     redirect('/login')

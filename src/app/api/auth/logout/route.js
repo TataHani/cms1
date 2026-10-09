@@ -1,7 +1,7 @@
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { destroySession } from '../../../../lib/session'
 
 export async function GET() {
-  cookies().delete('user_id')
+  await destroySession()
   redirect('/')
 }
