@@ -1,15 +1,11 @@
 import { createSession } from '../../../../lib/session'
+import { verifyPassword, isLegacyHash, hashPassword } from '../../../../lib/password'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 )
-
-function hashPassword(password) {
-  const crypto = require('crypto')
-  return crypto.createHash('sha256').update(password).digest('hex')
-}
 
 export async function POST(request) {
   const { email, password } = await request.json()
@@ -20,13 +16,19 @@ export async function POST(request) {
 
   const { data: user } = await supabase
     .from('users')
-    .select('*')
+    .select('id, email, password_hash')
     .eq('email', email)
-    .eq('password_hash', hashPassword(password))
     .single()
 
-  if (!user) {
+  if (!user || !verifyPassword(password, user.password_hash)) {
     return Response.json({ error: 'Bledny email lub haslo' }, { status: 401 })
+  }
+
+  if (isLegacyHash(user.password_hash)) {
+    await supabase
+      .from('users')
+      .update({ password_hash: hashPassword(password) })
+      .eq('id', user.id)
   }
 
   await createSession(user.id)

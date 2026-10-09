@@ -1,14 +1,10 @@
+import { hashPassword } from '../../../../lib/password'
 import { createClient } from '@supabase/supabase-js'
-import crypto from 'crypto'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 )
-
-function hashPassword(password) {
-  return crypto.createHash('sha256').update(password).digest('hex')
-}
 
 export async function POST(request) {
   const { token, password } = await request.json()
