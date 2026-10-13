@@ -198,6 +198,29 @@ export async function GET(request) {
     }
   })
 
+  // Odwrotny kierunek: opinie, ktore Google zwraca, a ktorych nie ma w bazie.
+  // Sync bierze tylko okno ostatnich zmian, wiec opinia wypuszczona przez Google
+  // z opoznieniem (ze stara data) nigdy do bazy nie trafia i nie dostaje odpowiedzi.
+  const googleInRange = googleReviews.filter(r => r.createTime >= since)
+  const { data: knownRows } = await supabase
+    .from('reviews')
+    .select('google_review_id')
+    .eq('business_id', business.id)
+    .in('google_review_id', googleInRange.map(r => r.reviewId))
+  const knownIds = new Set((knownRows || []).map(r => r.google_review_id))
+
+  const missingInDb = googleInRange
+    .filter(r => !knownIds.has(r.reviewId))
+    .filter(r => !reviewerQuery || (r.reviewer?.displayName || '').toLowerCase().includes(reviewerQuery.toLowerCase()))
+    .map(r => ({
+      reviewer: r.reviewer?.displayName || null,
+      stars: r.starRating,
+      create_time: r.createTime,
+      update_time: r.updateTime,
+      google_has_reply: !!r.reviewReply,
+      ...(includeRaw ? { raw_google: r } : {})
+    }))
+
   return Response.json({
     business: business.title,
     google_account_id: business.google_account_id,
@@ -207,6 +230,7 @@ export async function GET(request) {
     google_reviews_fetched: googleReviews.length,
     db_reviews_in_range: comparison.length,
     mismatches: comparison.filter(c => c.status.startsWith('ROZBIEZNOSC') || c.status.startsWith('BRAK')).length,
-    reviews: comparison
+    reviews: comparison,
+    missing_in_db: missingInDb
   })
 }
