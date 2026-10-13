@@ -21,9 +21,17 @@ const supabase = createClient(
 // bez tekstu byly uznawane za "edytowane" przy kazdym biegu crona.
 const normalizeComment = (c) => (c || '').trim()
 
-async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
+// Dosylka: Google potrafi udostepnic opinie w API z opoznieniem, ale z
+// pierwotnym updateTime. Inkrementalny sync (okno od ostatniej znanej zmiany)
+// takiej opinii nigdy nie zobaczy, wiec nie dostaje ona odpowiedzi
+// (np. Adam Skiba, VW Bydgoszcz, 02.10.2026). Raz na godzine przegladamy
+// ostatnie opinie bez filtra daty i dociagamy te, ktorych brak w bazie.
+const BACKFILL_PAGES = 3
+
+async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime, maxPages = Infinity) {
   let allReviews = []
   let pageToken = null
+  let pages = 0
 
   do {
     const url = new URL(
@@ -51,7 +59,8 @@ async function fetchAllReviews(accountId, locationId, accessToken, stopAtTime) {
     }
 
     pageToken = data.nextPageToken || null
-  } while (pageToken)
+    pages++
+  } while (pageToken && pages < maxPages)
 
   if (stopAtTime) {
     allReviews = allReviews.filter(r =>
@@ -78,6 +87,10 @@ export async function GET(request) {
 
   let totalNewReviews = 0
   let alertEmailsSent = 0
+  let backfilledReviews = 0
+
+  // Cron chodzi co 5 minut, wiec ten warunek trafia jeden bieg na godzine.
+  const isBackfillRun = new Date().getUTCMinutes() < 5
 
   for (const connection of connections) {
     let accessToken = connection.access_token
@@ -169,6 +182,34 @@ export async function GET(request) {
           accessToken,
           stopAtTime
         )
+
+        if (isBackfillRun && stopAtTime) {
+          const recent = await fetchAllReviews(
+            business.google_account_id,
+            business.google_location_id,
+            accessToken,
+            null,
+            BACKFILL_PAGES
+          )
+          const fetchedIds = new Set(allReviews.map(r => r.reviewId))
+          const candidates = recent.filter(r => r.createTime && !fetchedIds.has(r.reviewId))
+
+          if (candidates.length > 0) {
+            // Tylko same ID z zakresu dat kandydatow - bez kolumny comment (egress).
+            const oldest = candidates.reduce((min, r) => r.createTime < min ? r.createTime : min, candidates[0].createTime)
+            const { data: knownRows } = await supabase
+              .from('reviews')
+              .select('google_review_id')
+              .eq('business_id', business.id)
+              .gte('create_time', oldest)
+              .limit(50000)
+            const knownIds = new Set((knownRows || []).map(r => r.google_review_id))
+            const missing = candidates.filter(r => !knownIds.has(r.reviewId))
+
+            allReviews.push(...missing)
+            backfilledReviews += missing.length
+          }
+        }
 
         // Próg "świeżości" — opinia musi być młodsza niż 20 minut żeby oznaczyć ją
         // jako nową w interfejsie (badge "nowa" przy opinii)
@@ -298,6 +339,7 @@ export async function GET(request) {
     success: true,
     newReviews: totalNewReviews,
     alertEmailsSent,
+    backfilledReviews,
     timestamp: new Date().toISOString()
   })
 }
