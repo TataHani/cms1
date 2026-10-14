@@ -70,9 +70,10 @@ export async function GET(request) {
     .from('businesses').select('*').eq('hidden', false)
   if (error) return Response.json({ error: error.message }, { status: 500 })
 
-  const { locations, problems, skodaTitles } = matchLocations(businesses)
+  const { locations, problems } = matchLocations(businesses)
   if (problems.length > 0) {
-    return Response.json({ error: 'Niejednoznaczne dopasowanie lokalizacji', problems, skodaTitles }, { status: 500 })
+    console.error('Raport tygodniowy wstrzymany:', problems)
+    return Response.json({ error: 'Brak wizytowek w bazie', problems }, { status: 500 })
   }
 
   const now = new Date()
@@ -87,7 +88,7 @@ export async function GET(request) {
 
   if (dryRun) {
     return Response.json({
-      period, serviceMethod: method, skodaTitles,
+      period, serviceMethod: method,
       locations: stats.map((s) => ({
         name: s.name, business: s.business.title,
         totalAvg: s.totalAvg, totalCount: s.totalCount, weekAvg: s.weekAvg, weekCount: s.weekCount,

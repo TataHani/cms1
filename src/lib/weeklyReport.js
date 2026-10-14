@@ -2,39 +2,33 @@
 import { parseReviewComment } from './reviewText'
 
 // Kolejnosc = kolejnosc w mailu. Pozostale wizytowki Skody to punkty serwisowe
-// innych marek i nie wchodza do raportu.
+// innych marek i nie wchodza do raportu. Przypiete po google_location_id, bo
+// tytuly w Google nie pasuja do nazw uzywanych w firmie (Lubicz Dolny to w Google
+// "Toruń", Lubowidzka to "Gdańsk Szadółki").
 export const SKODA_LOCATIONS = [
-  { name: 'Lubcz Dolny', pattern: /lubcz/i },
-  { name: 'Wejherowo', pattern: /wejherow/i },
-  { name: 'Gdynia', pattern: /gdyni/i },
-  { name: 'Gdańsk Lubowidzka', pattern: /lubowid/i },
-  { name: 'Gdańsk Grunwaldzka', pattern: /grunwaldzk/i },
-  { name: 'Gdańsk Stadion', pattern: /stadion/i },
+  { name: 'Lubicz Dolny', googleLocationId: 'locations/15648624070644171142' },
+  { name: 'Wejherowo', googleLocationId: 'locations/10412590210048085561' },
+  { name: 'Gdynia', googleLocationId: 'locations/15723146772742005549' },
+  { name: 'Gdańsk Lubowidzka', googleLocationId: 'locations/5854647733596230854' },
+  { name: 'Gdańsk Grunwaldzka', googleLocationId: 'locations/1386008451320649169' },
+  { name: 'Gdańsk Stadion', googleLocationId: 'locations/12299652438836470900' },
 ]
 
-const SKODA = /skoda|škoda/i
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const PAGE = 1000
 
 // Zapasowe rozpoznawanie opinii serwisowych, gdy Claude API nie odpowie.
 const SERVICE_KEYWORDS = /serwis|przegl[aą]d|napraw|warsztat|mechani|doradc|gwarancj|wymian|diagnost|olej|opon|blacharn|lakiern|cz[eę][sś]ci|usterk|awari|klimatyzac|hamulc|rozrz[aą]d|akumulator|auto zast[eę]pcz|odbi[oó]r auta|service|repair|inspection/i
 
-// Mapuje 6 lokalizacji na wizytowki. Rzuca blad, gdy ktoras lokalizacja ma
-// 0 albo wiecej niz 1 dopasowanie - lepiej nie wyslac raportu niz wyslac
-// z danymi z niewlasciwej wizytowki.
+// Zwraca liste brakujacych lokalizacji - lepiej nie wyslac raportu niz wyslac
+// niepelny (np. po ukryciu albo odlaczeniu wizytowki).
 export function matchLocations(businesses) {
-  const skoda = businesses.filter((b) => SKODA.test(b.title || ''))
-  const problems = []
-
-  const locations = SKODA_LOCATIONS.map((loc) => {
-    const matches = skoda.filter((b) => loc.pattern.test(`${b.title} ${b.address || ''}`))
-    if (matches.length !== 1) {
-      problems.push(`${loc.name}: ${matches.length} dopasowan (${matches.map((m) => m.title).join(' | ') || 'brak'})`)
-    }
-    return { name: loc.name, business: matches[0] }
-  })
-
-  return { locations, problems, skodaTitles: skoda.map((b) => b.title) }
+  const locations = SKODA_LOCATIONS.map((loc) => ({
+    name: loc.name,
+    business: businesses.find((b) => b.google_location_id === loc.googleLocationId),
+  }))
+  const problems = locations.filter((l) => !l.business).map((l) => `${l.name}: brak wizytowki w bazie`)
+  return { locations, problems }
 }
 
 // Wszystkie oceny wizytowek, stronicowane (Supabase oddaje max 1000 wierszy).
