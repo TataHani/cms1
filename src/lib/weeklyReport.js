@@ -70,15 +70,19 @@ function textOf(review) {
   return parseReviewComment(review.comment).original
 }
 
-// Najlepsza: najwyzsza ocena, z trescia, najdluzsza. Najslabsza: najnizsza
-// ocena, z trescia. Najslabsza pokazywana tylko gdy jest nizsza od najlepszej
-// (przy samych 5* nie ma sensu wskazywac "najgorszej").
+// Najlepsza: najwyzsza ocena (min. 4*), z trescia, najdluzsza. Najslabsza:
+// najnizsza ocena, pokazywana gdy jest nizsza od najlepszej albo najlepszej brak
+// (przy samych 5* nie ma "najgorszej", a jedyna opinia 1* nie jest "najlepsza").
+const MIN_BEST_RATING = 4
+
 function pickBestWorst(reviews) {
   if (reviews.length === 0) return { best: null, worst: null }
   const byText = (a, b) => textOf(b).length - textOf(a).length
-  const best = [...reviews].sort((a, b) => b.star_rating - a.star_rating || byText(a, b))[0]
-  const worst = [...reviews].sort((a, b) => a.star_rating - b.star_rating || byText(a, b))[0]
-  return { best, worst: worst.star_rating < best.star_rating ? worst : null }
+  const top = [...reviews].sort((a, b) => b.star_rating - a.star_rating || byText(a, b))[0]
+  const bottom = [...reviews].sort((a, b) => a.star_rating - b.star_rating || byText(a, b))[0]
+  const best = top.star_rating >= MIN_BEST_RATING ? top : null
+  const worst = !best || bottom.star_rating < best.star_rating ? bottom : null
+  return { best, worst }
 }
 
 async function classifyWithAi(reviews) {
