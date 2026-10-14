@@ -98,6 +98,36 @@ async function publishReply(business, accessToken, googleReviewId, comment) {
   return response.ok
 }
 
+// Jeden mail do adminow na bieg crona. Kazda opinia trafia tu najwyzej raz,
+// bo formulka zapisuje sie w suggested_reply i nastepny bieg jej nie generuje.
+async function sendAiFailureAlert(failures) {
+  const { data: admins } = await supabase
+    .from('users').select('email').eq('role', 'admin')
+
+  const rows = failures.map(({ review, business, error }) =>
+    `<li>${business.title}: ${review.reviewer_name || 'Anonim'} (${review.star_rating}★), blad: ${error}</li>`
+  ).join('')
+
+  for (const admin of admins || []) {
+    if (!admin.email) continue
+    try {
+      await sendEmail(
+        admin.email,
+        'Blad AI w auto-odpowiedziach (' + failures.length + ')',
+        `
+          <h2>AI nie wygenerowalo odpowiedzi</h2>
+          <p>Dla ponizszych opinii zapisano sztywna formulke. Zostanie opublikowana po ${POS_PUBLISH_AT_H}h od wystawienia opinii, jesli nikt jej nie zmieni.</p>
+          <ul>${rows}</ul>
+          <p>Najczestsza przyczyna: brak kredytow lub niewazny klucz Anthropic API (blad 400/401).</p>
+          <p><a href="${APP_URL}/reviews">Popraw odpowiedzi w aplikacji</a></p>
+        `
+      )
+    } catch (e) {
+      console.error('Blad wysylki alertu o awarii AI:', e)
+    }
+  }
+}
+
 export async function GET(request) {
   const secret = request.headers.get('x-cron-secret')
   if (secret !== process.env.CRON_SECRET) {
@@ -132,6 +162,7 @@ export async function GET(request) {
   const now = Date.now()
   let alertsSent = 0
   let published = 0
+  const aiFailures = []
 
   for (const review of reviews) {
     const business = businessMap.get(review.business_id)
@@ -150,6 +181,7 @@ export async function GET(request) {
         // Gdy AI zawiedzie, publikacja i tak musi miec tresc - uzywamy formulki.
         console.error('Blad generowania AI, uzywam formulki:', e)
         suggestion = buildSuggestion(review, business)
+        aiFailures.push({ review, business, error: e.message })
       }
       await supabase
         .from('reviews').update({ suggested_reply: suggestion }).eq('id', review.id)
@@ -210,9 +242,12 @@ export async function GET(request) {
     }
   }
 
+  if (aiFailures.length > 0) await sendAiFailureAlert(aiFailures)
+
   return Response.json({
     success: true,
     alertsSent,
+    aiFailures: aiFailures.length,
     published,
     timestamp: new Date().toISOString()
   })
