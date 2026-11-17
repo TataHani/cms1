@@ -79,6 +79,25 @@ async function getAccessToken(connection) {
   return refreshData.access_token
 }
 
+// Pobiera aktualna odpowiedz na opinie prosto z Google. Sync przyrostowy nie
+// widzi odpowiedzi dodanej recznie w Google (nie zmienia ona updateTime opinii),
+// a PUT /reply nadpisuje istniejaca odpowiedz. Zwraca obiekt reviewReply,
+// null gdy odpowiedzi nie ma, albo undefined gdy nie udalo sie sprawdzic.
+async function fetchCurrentReply(business, accessToken, googleReviewId) {
+  const url = 'https://mybusiness.googleapis.com/v4/' +
+    business.google_account_id + '/' +
+    business.google_location_id + '/reviews/' +
+    googleReviewId
+
+  const response = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + accessToken },
+  })
+  if (!response.ok) return undefined
+
+  const data = await response.json()
+  return data.reviewReply || null
+}
+
 // Publikuje odpowiedz do Google Business Profile (v4). Zwraca true/false.
 async function publishReply(business, accessToken, googleReviewId, comment) {
   const url = 'https://mybusiness.googleapis.com/v4/' +
@@ -224,6 +243,22 @@ export async function GET(request) {
         if (accessToken) tokenCache.set(connection.id, accessToken)
       }
       if (!accessToken) continue
+
+      // Ostatnia kontrola przed publikacja: czy ktos nie odpowiedzial juz w Google.
+      // Gdy nie da sie tego sprawdzic, nie publikujemy (sprobujemy w nastepnym biegu).
+      const currentReply = await fetchCurrentReply(business, accessToken, review.google_review_id)
+      if (currentReply === undefined) continue
+      if (currentReply) {
+        await supabase
+          .from('reviews')
+          .update({
+            has_reply: true,
+            reply_comment: currentReply.comment || null,
+            reply_update_time: currentReply.updateTime || null
+          })
+          .eq('id', review.id)
+        continue
+      }
 
       const ok = await publishReply(business, accessToken, review.google_review_id, suggestion)
       if (ok) {
