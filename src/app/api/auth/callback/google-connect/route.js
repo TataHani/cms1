@@ -79,6 +79,7 @@ export async function GET(request) {
   // o tresci przekierowania - wczesniej kazdy blad konczyl sie ekranem sukcesu.
   let importError = null
   let foundCount = 0
+  let skippedCount = 0
 
   try {
     const accountsResponse = await fetch(
@@ -102,6 +103,23 @@ export async function GET(request) {
       const locations = await fetchAllLocations(account.name, tokens.access_token)
 
       for (const location of locations) {
+        // Blokada duplikatu (jak w api/business/connect): wizytowka juz jest
+        // w systemie u INNEGO usera. Kopia pod drugim polaczeniem powoduje, ze
+        // cron przerzuca opinie miedzy kopiami i wysyla alert co 5 minut
+        // (Audi, 23.11.2026). Dostep nadaje admin przez business_permissions.
+        const { data: existing } = await supabase
+          .from('businesses')
+          .select('user_id')
+          .eq('google_location_id', location.name)
+
+        const hasOwn = existing?.some(e => e.user_id === userId)
+        const hasOthers = existing?.some(e => e.user_id !== userId)
+
+        if (hasOthers && !hasOwn) {
+          skippedCount++
+          continue
+        }
+
         await supabase.from('businesses').upsert({
           user_id: userId,
           google_connection_id: connection.id,
@@ -128,5 +146,5 @@ export async function GET(request) {
     redirect('/settings?error=import_failed&msg=' + encodeURIComponent(importError))
   }
 
-  redirect('/settings?success=connected&found=' + foundCount)
+  redirect('/settings?success=connected&found=' + foundCount + '&skipped=' + skippedCount)
 }

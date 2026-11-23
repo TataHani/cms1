@@ -257,7 +257,20 @@ export async function GET(request) {
           // Pozytywne nie generuja szumu - zajmie sie nimi auto-odpowiedz.
           const isNegative = starRating === 1 || starRating === 2
 
-          if (isFirstSeen && isNegative) {
+          // Bezpiecznik: jedna opinia = jeden alert. Gdy ta sama lokalizacja
+          // jest w bazie dwa razy, opinia skacze miedzy kopiami i przy kazdym
+          // biegu wyglada na "pierwszy raz widziana" (Audi, 23.11.2026).
+          let alreadyAlerted = false
+          if (isFirstSeen && isNegative && reviewDbId) {
+            const { count } = await supabase
+              .from('alerts')
+              .select('id', { count: 'exact', head: true })
+              .eq('review_id', reviewDbId)
+              .eq('alert_type', 'NEGATIVE_REVIEW')
+            alreadyAlerted = count > 0
+          }
+
+          if (isFirstSeen && isNegative && !alreadyAlerted) {
             await supabase.from('alerts').insert({
               user_id: connection.user_id,
               business_id: business.id,
